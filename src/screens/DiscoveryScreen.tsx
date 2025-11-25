@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, ActivityIndicator, SafeAreaView, 
   TouchableOpacity, TextInput, Dimensions, Image, Keyboard, KeyboardAvoidingView, Platform, Alert,
-  TouchableWithoutFeedback, Animated as RNAnimated 
+  TouchableWithoutFeedback, Animated as RNAnimated, StatusBar
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
@@ -16,6 +16,8 @@ import Animated, {
   runOnJS,
   withTiming,
 } from 'react-native-reanimated';
+// Importando ferramenta para esconder a barra do Android
+import * as NavigationBar from 'expo-navigation-bar';
 
 import { useDiscoveryQueue } from '../features/discovery/hooks/useDiscoveryQueue';
 import { useDiscoveryMutations } from '../features/discovery/hooks/useDiscoveryMutations';
@@ -142,22 +144,20 @@ function DiscoveryCard({
   );
 }
 
-// --- FOOTER CORRIGIDO (Lógica de Envio Sólida) ---
+// --- FOOTER ---
 function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg, isLiked }: any) {
   const [msg, setMsg] = useState('');
-  const [localLoading, setLocalLoading] = useState(false); // Loading local do botão
+  const [localLoading, setLocalLoading] = useState(false);
 
   const handleSend = async () => { 
       if (!msg.trim() || localLoading || isProcessing) return; 
       
       setLocalLoading(true);
       try {
-          // Aguarda o envio. Se der erro (402), vai cair no catch
           await onSendMessage(msg); 
-          setMsg(''); // Só limpa se tiver sucesso
+          setMsg(''); 
           Keyboard.dismiss(); 
       } catch (error) {
-          // Se deu erro, mantemos o texto para o usuário não perder
       } finally {
           setLocalLoading(false);
       }
@@ -177,7 +177,7 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
             value={msg} 
             onChangeText={setMsg} 
             onFocus={onFocusMsg} 
-            onSubmitEditing={handleSend} // Envia ao dar Enter
+            onSubmitEditing={handleSend} 
             returnKeyType="send" 
           />
           <TouchableOpacity 
@@ -223,6 +223,24 @@ export default function DiscoveryScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastIcon, setToastIcon] = useState('heart');
+
+  // --- CORREÇÃO 1: MODO IMERSIVO NO ANDROID ---
+  useFocusEffect(
+    React.useCallback(() => {
+      if (Platform.OS === 'android') {
+        // Esconde a barra de navegação (botões virtuais)
+        NavigationBar.setVisibilityAsync('hidden');
+        // Deixa a barra transparente para o app ocupar tudo
+        NavigationBar.setBehaviorAsync('overlay-swipe');
+      }
+      return () => {
+        if (Platform.OS === 'android') {
+          // Restaura ao sair da tela (opcional, mas recomendado)
+          NavigationBar.setVisibilityAsync('visible');
+        }
+      };
+    }, [])
+  );
 
   const showToast = (message: string, icon: string = 'heart') => { 
       setToastMessage(message); 
@@ -326,20 +344,15 @@ export default function DiscoveryScreen() {
       });
   };
 
-  // --- CORREÇÃO: Tratamento de Erro e Retorno de Promise ---
   const handleSendMessage = async (message: string) => {
     if (!currentProfile) return;
     try {
-        // O hook useDiscoveryMutations já faz a navegação se der 402.
-        // Mas precisamos que ele lance o erro para o ActionFooter não limpar o texto.
         await sendIcebreaker({ userId: currentProfile.userId, content: message });
         showToast("Mensagem enviada! 🚀", "paper-plane");
     } catch (error: any) { 
-        // Se for 402, o hook já navegou. Não mostramos alerta.
         if (error?.response?.status === 402) {
-             throw error; // Relança para o ActionFooter saber que falhou
+             throw error; 
         }
-        // Se for outro erro, mostramos alerta e relançamos
         Alert.alert("Erro", "Falha no envio."); 
         throw error;
     }
@@ -429,8 +442,20 @@ export default function DiscoveryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827' },
+  
   searchWrapper: { zIndex: 999, elevation: 999 },
-  headerContainer: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, alignItems: 'center', backgroundColor: '#111827' },
+  
+  // --- CORREÇÃO 2: PADDING TOP SÓ NO ANDROID ---
+  headerContainer: { 
+      flexDirection: 'row', 
+      paddingHorizontal: 16, 
+      paddingBottom: 10, 
+      alignItems: 'center', 
+      backgroundColor: '#111827',
+      // Se for Android, empurra para baixo da barra de status
+      paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 30) + 10 : 10 
+  },
+  
   inputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A', borderRadius: 25, paddingHorizontal: 12, height: 45, marginRight: 10, borderWidth: 1, borderColor: '#374151' },
   input: { flex: 1, color: 'white' },
   searchButton: { backgroundColor: '#5B21B6', paddingHorizontal: 16, height: 45, borderRadius: 25, justifyContent: 'center' },
