@@ -1,0 +1,256 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  View, Text, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, Animated, Easing 
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Video, ResizeMode, Audio } from 'expo-av'; 
+import { FeedPost, MediaType } from '../services/feedApi';
+import { useAuth } from '../../../contexts/AuthContext'; 
+// --- NOVO IMPORT: Para verificar se já segue ---
+import { useGetFollowing } from '../../profile/hooks/useProfile'; 
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const TAB_BAR_HEIGHT = 80; 
+const POST_HEIGHT = SCREEN_HEIGHT - TAB_BAR_HEIGHT; 
+const DEFAULT_PHOTO_DURATION = 5000; 
+
+interface FeedUserDeckProps {
+  authorId: string;
+  authorName: string;
+  authorAvatar: string | null;
+  posts: FeedPost[];
+  isDeckActive: boolean; 
+  paused: boolean;
+  onDeckFinished: () => void; 
+  onLikePost: (postId: string) => void;
+  onOpenComments: (postId: string, authorId: string) => void;
+  onSharePost: (postId: string) => void;
+  onNavigateToProfile: (userId: string) => void;
+  onFollowAuthor: (userId: string) => void;
+  onDeletePost?: (postId: string) => void; 
+}
+
+export function FeedUserDeck({ 
+  authorId,
+  authorName, 
+  authorAvatar, 
+  posts, 
+  isDeckActive,
+  paused,
+  onDeckFinished,
+  onLikePost, 
+  onOpenComments,
+  onSharePost,
+  onNavigateToProfile,
+  onFollowAuthor,
+  onDeletePost
+}: FeedUserDeckProps) {
+  
+  const { user } = useAuth(); 
+  const isOwner = user?.id === authorId; 
+
+  // --- CORREÇÃO DE PERSISTÊNCIA DO FOLLOW ---
+  // Busca a lista de quem eu sigo
+  const { data: followingList } = useGetFollowing(user?.id);
+  
+  // Verifica se este autor está na lista
+  const isFollowing = followingList?.some(u => u.id === authorId) ?? false;
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    async function enableAudio() {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
+      } catch (e) { console.log("Erro áudio:", e); }
+    }
+    enableAudio();
+  }, []);
+
+  useEffect(() => {
+    if (!isDeckActive || paused) {
+      progressAnim.setValue(0);
+      return;
+    }
+    progressAnim.setValue(0);
+    const currentPost = posts[currentIndex];
+    if (!currentPost) return;
+
+    let actualDuration = DEFAULT_PHOTO_DURATION;
+    if (currentPost.mediaType === MediaType.VIDEO && currentPost.videoDuration) {
+        actualDuration = (currentPost.videoDuration * 1000) + 200;
+    }
+
+    const animation = Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: actualDuration, 
+      easing: Easing.linear,
+      useNativeDriver: false, 
+    });
+
+    const timer = setTimeout(() => { goToNextPost(); }, actualDuration);
+    animation.start();
+
+    return () => { clearTimeout(timer); animation.stop(); };
+  }, [currentIndex, isDeckActive, paused]);
+
+  const goToNextPost = () => {
+    if (currentIndex < posts.length - 1) {
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+    } else {
+      onDeckFinished();
+    }
+  };
+
+  const onViewRef = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) { setCurrentIndex(viewableItems[0].index || 0); }
+  });
+  const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
+
+  const handleFollowPress = () => { 
+      // Apenas chamamos a função. O React Query atualizará a lista 'followingList'
+      // automaticamente, fazendo o botão mudar de estado.
+      onFollowAuthor(authorId); 
+  };
+
+  const renderPostItem = ({ item, index }: { item: FeedPost, index: number }) => {
+    const isActive = isDeckActive && index === currentIndex && !paused;
+
+    return (
+      <View style={styles.postContainer}>
+        {item.mediaType === MediaType.VIDEO ? (
+            <Video
+                source={{ uri: item.imageUrl }}
+                style={styles.fullImage}
+                resizeMode={ResizeMode.COVER}
+                isLooping={false}
+                shouldPlay={isActive} 
+                isMuted={false}
+            />
+        ) : (
+            <Image source={{ uri: item.imageUrl }} style={styles.fullImage} resizeMode="cover" />
+        )}
+
+        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.9)']} style={styles.bottomGradient} />
+
+        <View style={styles.rightActions}>
+            
+            {/* LÓGICA: SEGUIR vs APAGAR */}
+            {isOwner ? (
+                <TouchableOpacity 
+                    style={styles.actionButton} 
+                    onPress={() => {
+                        if (onDeletePost) {
+                            onDeletePost(item.id);
+                        }
+                    }}
+                >
+                    <View style={styles.iconCircle}>
+                       <Ionicons name="trash-outline" size={24} color="#EF4444" />
+                    </View>
+                    <Text style={[styles.actionLabel, {color: '#EF4444'}]}>Apagar</Text>
+                </TouchableOpacity>
+            ) : (
+                // --- BOTÃO SEGUIR CORRIGIDO ---
+                // Agora ele usa a variável 'isFollowing' baseada no banco de dados, não state local
+                <TouchableOpacity style={styles.actionButton} onPress={handleFollowPress} disabled={isFollowing}>
+                    <View style={[styles.followIconContainer, isFollowing && { borderColor: '#10B981', backgroundColor:'rgba(16, 185, 129, 0.3)' }]}>
+                       {isFollowing ? 
+                          <Ionicons name="checkmark" size={20} color="#10B981" /> : 
+                          <><Ionicons name="person" size={20} color="white" /><View style={styles.plusBadge}><Ionicons name="add" size={10} color="white" /></View></>
+                       }
+                    </View>
+                    <Text style={styles.actionLabel}>{isFollowing ? 'Seguindo' : 'Seguir'}</Text>
+                </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.actionButton} onPress={() => onLikePost(item.id)}>
+               <Ionicons name={item.isLikedByMe ? "heart" : "heart-outline"} size={35} color={item.isLikedByMe ? "#EF4444" : "white"} />
+               <Text style={styles.actionLabel}>{item.likesCount}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton} onPress={() => onOpenComments(item.id, item.authorId)}>
+               <Ionicons name="chatbubble-ellipses-outline" size={32} color="white" />
+               <Text style={styles.actionLabel}>{item.commentsCount}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton} onPress={() => onSharePost(item.id)}>
+               <Ionicons name="share-outline" size={32} color="white" />
+               <Text style={styles.actionLabel}>Partilhar</Text>
+            </TouchableOpacity>
+        </View>
+
+        <View style={styles.bottomInfo}>
+            {item.content && <Text style={styles.caption} numberOfLines={3}>{item.content}</Text>}
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <View style={{ height: POST_HEIGHT, width: SCREEN_WIDTH, backgroundColor: 'black' }}>
+      <View style={styles.progressContainer}>
+         {posts.map((_, index) => {
+           let width: any = '0%';
+           if (index < currentIndex) width = '100%'; 
+           else if (index === currentIndex) {
+              width = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+           }
+           return (<View key={index} style={styles.progressBarBg}><Animated.View style={[styles.progressBarFill, { width }]} /></View>);
+         })}
+      </View>
+
+      <TouchableOpacity style={styles.header} onPress={() => onNavigateToProfile(authorId)} activeOpacity={0.8}>
+         {authorAvatar ? <Image source={{ uri: authorAvatar }} style={styles.avatar} /> : <View style={[styles.avatar, {backgroundColor:'#333'}]} />}
+         <Text style={styles.authorName}>@{authorName}</Text>
+         <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+      </TouchableOpacity>
+
+      <FlatList
+        ref={flatListRef}
+        data={posts}
+        keyExtractor={(item) => item.id}
+        renderItem={renderPostItem}
+        horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+        onViewableItemsChanged={onViewRef.current}
+        viewabilityConfig={viewConfigRef.current}
+        initialNumToRender={1} maxToRenderPerBatch={2} windowSize={3} scrollEnabled={true} 
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  postContainer: { width: SCREEN_WIDTH, height: POST_HEIGHT, justifyContent: 'center', backgroundColor: 'black' },
+  fullImage: { width: '100%', height: '100%' },
+  bottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '40%' },
+
+  progressContainer: { position: 'absolute', top: 60, left: 10, right: 10, zIndex: 20, flexDirection: 'row', gap: 4, height: 3 },
+  progressBarBg: { flex: 1, height: '100%', backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2 },
+  progressBarFill: { height: '100%', backgroundColor: 'white', borderRadius: 2 },
+
+  header: { position: 'absolute', top: 85, left: 15, zIndex: 30, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', padding: 6, borderRadius: 20 },
+  avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: 'white', marginRight: 10 },
+  authorName: { color: 'white', fontWeight: 'bold', fontSize: 18, textShadowColor: 'black', textShadowRadius: 3, marginRight: 4 },
+
+  rightActions: { position: 'absolute', right: 10, bottom: 50, alignItems: 'center', zIndex: 20, gap: 20 },
+  actionButton: { alignItems: 'center' },
+  actionLabel: { color: 'white', fontSize: 12, fontWeight: '600', marginTop: 2, textShadowColor: 'black', textShadowRadius: 3 },
+  
+  followIconContainer: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, borderWidth: 1, borderColor: 'white' },
+  iconCircle: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', borderRadius: 20, borderWidth: 1, borderColor: '#EF4444' }, // Estilo da lixeira
+  plusBadge: { position: 'absolute', bottom: -5, backgroundColor: '#EF4444', borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' },
+
+  bottomInfo: { position: 'absolute', bottom: 20, left: 15, right: 80, zIndex: 20 },
+  caption: { color: 'white', fontSize: 14, marginBottom: 10, textShadowColor: 'black', textShadowRadius: 3 },
+});
