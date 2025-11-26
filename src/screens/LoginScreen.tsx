@@ -8,8 +8,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from '../lib/toast';
-
-// 1. IMPORTAR O HOOK DE TRADUÇÃO
 import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
@@ -17,8 +15,6 @@ const { width } = Dimensions.get('window');
 export function LoginScreen() {
   const navigation = useNavigation<any>();
   const { signIn, isLoading } = useAuth();
-  
-  // 2. ATIVAR O HOOK
   const { t } = useTranslation();
 
   const [email, setEmail] = useState('');
@@ -26,7 +22,7 @@ export function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      toast.error('Preencha todos os campos'); // Opcional: Traduzir erros depois
+      toast.error('Preencha todos os campos');
       return;
     }
     try {
@@ -40,7 +36,6 @@ export function LoginScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Fundo Cósmico */}
       <Image 
         source={require('../../assets/splash-icon.png')} 
         style={[StyleSheet.absoluteFill, { width: '100%', height: '100%', opacity: 0.2 }]} 
@@ -56,8 +51,8 @@ export function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
+        {/* Cabeçalho Centralizado */}
         <View style={styles.header}>
-          {/* 3. USANDO AS TRADUÇÕES */}
           <Text style={styles.title}>{t('welcome_back')}</Text>
           <Text style={styles.subtitle}>{t('login_subtitle')}</Text>
         </View>
@@ -66,7 +61,7 @@ export function LoginScreen() {
           <View style={styles.inputGroup}>
             <TextInput
               style={styles.input}
-              placeholder={t('email_placeholder')} // Traduzido
+              placeholder={t('email_placeholder')}
               placeholderTextColor="#6B7280"
               autoCapitalize="none"
               keyboardType="email-address"
@@ -78,7 +73,7 @@ export function LoginScreen() {
           <View style={styles.inputGroup}>
             <TextInput
               style={styles.input}
-              placeholder={t('password_placeholder')} // Traduzido
+              placeholder={t('password_placeholder')}
               placeholderTextColor="#6B7280"
               secureTextEntry
               value={password}
@@ -119,10 +114,32 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
-  content: { flex: 1, justifyContent: 'center', padding: 24 },
-  header: { marginBottom: 40 },
-  title: { fontSize: 32, fontWeight: 'bold', color: '#FFF', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#9CA3AF' },
+  
+  content: { 
+    flex: 1, 
+    justifyContent: 'center', // Centraliza verticalmente
+    padding: 24 
+  },
+  
+  header: { 
+    marginBottom: 40, 
+    alignItems: 'center' // Centraliza os textos horizontalmente
+  },
+  
+  title: { 
+    fontSize: 32, 
+    fontWeight: 'bold', 
+    color: '#FFF', 
+    marginBottom: 8, 
+    textAlign: 'center' // Garante o texto no meio
+  },
+  
+  subtitle: { 
+    fontSize: 16, 
+    color: '#9CA3AF', 
+    textAlign: 'center' // Garante o texto no meio
+  },
+  
   form: { gap: 16 },
   inputGroup: { gap: 8 },
   input: {
