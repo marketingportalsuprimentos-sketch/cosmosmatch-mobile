@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Settings, MapPin, Pencil, Sparkles, UserPlus, MessageCircle, Ban, ArrowLeft, Check, MoreVertical, LogOut, ShieldAlert, Lock, Calculator, X, Send } from 'lucide-react-native';
+import { Settings, MapPin, Pencil, Sparkles, UserPlus, MessageCircle, Ban, ArrowLeft, Check, MoreVertical, LogOut, ShieldAlert, Lock, Calculator, X, Send, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { toast } from '../lib/toast'; 
@@ -47,11 +47,8 @@ const SendMessageModal = ({ visible, onClose, recipient, onSend, isLoading }: an
     const handleSend = () => {
         if (!message.trim()) return;
         onSend(message); 
-        // Não limpamos 'message' aqui imediatamente para caso de erro, 
-        // mas o Pai vai fechar o modal se der tudo certo ou se for erro 402.
     };
 
-    // Limpa o campo quando o modal fecha
     React.useEffect(() => {
         if (!visible) setMessage('');
     }, [visible]);
@@ -277,9 +274,11 @@ const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, on
     );
 };
 
-// --- CONEXÕES EM ÓRBITA ---
+// --- CONEXÕES EM ÓRBITA (ATUALIZADO COM BOTÃO DE SEGUIR) ---
 const ConnectionsCard = ({ userId }: { userId: string }) => {
     const navigation = useNavigation(); 
+    const { user: loggedInUser } = useAuth(); // 1. Quem sou eu?
+    
     const [activeTab, setActiveTab] = React.useState<'followers' | 'following'>('followers');
     const { data: followers } = useGetFollowers(userId);
     const { data: following } = useGetFollowing(userId);
@@ -287,6 +286,20 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
     
     const countFollowers = followers?.length || 0;
     const countFollowing = following?.length || 0;
+
+    // 2. Quem eu sigo? (Para saber se mostro + ou Check)
+    const { data: myFollowing } = useGetFollowing(loggedInUser?.id);
+    // 3. Ação de seguir
+    const { mutate: follow } = useFollowUser();
+    const { mutate: unfollow } = useUnfollowUser(); // Opcional, se quiser permitir unfollow aqui
+
+    const handleFollowToggle = (targetId: string, isAlreadyFollowing: boolean) => {
+        if (isAlreadyFollowing) {
+            unfollow(targetId);
+        } else {
+            follow(targetId);
+        }
+    };
 
     return (
         <View style={styles.card}>
@@ -298,12 +311,42 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
             <View style={{ height: (list && list.length > 3) ? MAX_CONNECTIONS_HEIGHT : 'auto' }}>
                 <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
                     <View style={styles.grid}>
-                        {list && list.length > 0 ? list.map((u: any) => (
-                            <TouchableOpacity key={u.id} style={styles.connectionItem} onPress={() => (navigation as any).push('PublicProfile', { userId: u.id })}>
-                                <Image source={{ uri: u.profile?.imageUrl || 'https://via.placeholder.com/150' }} style={styles.connectionAvatar} />
-                                <Text style={styles.connectionName} numberOfLines={1}>{u.name ? u.name.split(' ')[0] : 'User'}</Text>
-                            </TouchableOpacity>
-                        )) : <Text style={styles.emptyText}>Ninguém aqui ainda.</Text>}
+                        {list && list.length > 0 ? list.map((u: any) => {
+                            // Verifica se sou eu mesmo
+                            const isMe = loggedInUser?.id === u.id;
+                            // Verifica se já sigo essa pessoa
+                            const amIFollowing = myFollowing?.some((myF: any) => myF.id === u.id);
+
+                            return (
+                                <View key={u.id} style={styles.connectionItemWrapper}>
+                                    <TouchableOpacity 
+                                        style={styles.connectionItem} 
+                                        onPress={() => (navigation as any).push('PublicProfile', { userId: u.id })}
+                                    >
+                                        <Image source={{ uri: u.profile?.imageUrl || 'https://via.placeholder.com/150' }} style={styles.connectionAvatar} />
+                                        <Text style={styles.connectionName} numberOfLines={1}>{u.name ? u.name.split(' ')[0] : 'User'}</Text>
+                                    </TouchableOpacity>
+
+                                    {/* BOTÃO DE SEGUIR FLUTUANTE (Só aparece se não for eu) */}
+                                    {!isMe && (
+                                        <TouchableOpacity 
+                                            style={[
+                                                styles.followMiniBtn, 
+                                                amIFollowing && styles.followingMiniBtn // Estilo diferente se já segue
+                                            ]}
+                                            onPress={() => handleFollowToggle(u.id, !!amIFollowing)}
+                                            activeOpacity={0.8}
+                                        >
+                                            {amIFollowing ? (
+                                                <Check size={10} color="#FFF" strokeWidth={4} />
+                                            ) : (
+                                                <Plus size={10} color="#FFF" strokeWidth={4} />
+                                            )}
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            );
+                        }) : <Text style={styles.emptyText}>Ninguém aqui ainda.</Text>}
                     </View>
                 </ScrollView>
             </View>
@@ -393,7 +436,6 @@ export default function ProfileScreen() {
   const { data: photosData } = useGetGalleryPhotos(targetUserId);
   const { mutate: addPhoto, isPending: isUploading } = useAddPhotoToGallery();
   
-  // Mutation Chat
   const { mutate: sendMessage, isPending: isSendingMessage } = useCreateOrGetConversation();
 
   const handleEdit = () => navigation.navigate('EditProfileScreen' as never);
@@ -401,15 +443,60 @@ export default function ProfileScreen() {
 
   const activePhoto = photosData?.find(p => p.id === selectedPhotoId) || null;
 
-  const handleAddPhoto = async () => {
+  // --- FUNÇÃO AUXILIAR: ABRIR CÂMERA ---
+  const openCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Permissão necessária", "Precisamos de acesso à sua câmera.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.6
+      });
+      if (!result.canceled) addPhoto(result.assets[0].uri);
+    } catch (error) {
+      Alert.alert("Erro", "Não foi possível abrir a câmera.");
+    }
+  };
+
+  // --- FUNÇÃO AUXILIAR: ABRIR GALERIA ---
+  const openGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Permissão necessária", "Precisamos de acesso à sua galeria.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7
+      });
+      if (!result.canceled) addPhoto(result.assets[0].uri);
+    } catch (error) {
+      Alert.alert("Erro", "Não foi possível abrir a galeria.");
+    }
+  };
+
+  // --- CORREÇÃO DA GALERIA AQUI ---
+  const handleAddPhoto = () => {
     if (isUploading) return;
-    const result = await ImagePicker.launchImageLibraryAsync({ 
-        mediaTypes: ImagePicker.MediaType.Images, 
-        allowsEditing: true, 
-        aspect: [1, 1], 
-        quality: 0.8 
-    });
-    if (!result.canceled) addPhoto(result.assets[0].uri);
+
+    // Mostra o alerta com opções
+    Alert.alert(
+      "Adicionar Foto",
+      "Escolha a origem da foto",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Tirar Foto", onPress: openCamera },
+        { text: "Abrir Galeria", onPress: openGallery }
+      ]
+    );
   };
 
   const handleSendMessage = (text: string) => {
@@ -421,9 +508,6 @@ export default function ProfileScreen() {
              setMessageModalOpen(false); 
           },
           onError: (error: any) => {
-             // --- CORREÇÃO AQUI ---
-             // Se der erro 402, fechamos o modal IMEDIATAMENTE
-             // para não travar a tela quando voltar do Premium.
              if (error?.response?.status === 402) {
                  Keyboard.dismiss();
                  setMessageModalOpen(false);
@@ -527,9 +611,33 @@ const styles = StyleSheet.create({
   activeTabText: { color: '#818CF8' },
   
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, justifyContent: 'flex-start' },
-  connectionItem: { width: AVATAR_CARD_SIZE, alignItems: 'center', marginBottom: 12, backgroundColor: '#374151', padding: 8, borderRadius: 8 },
+  
+  // --- ESTILOS NOVOS PARA O BOTÃO DE SEGUIR MINI ---
+  connectionItemWrapper: { position: 'relative', width: AVATAR_CARD_SIZE, marginBottom: 12 },
+  connectionItem: { width: '100%', alignItems: 'center', backgroundColor: '#374151', padding: 8, borderRadius: 8 },
   connectionAvatar: { width: 48, height: 48, borderRadius: 24, marginBottom: 4, backgroundColor: '#4B5563' },
   connectionName: { color: '#FFF', fontSize: 11, textAlign: 'center' },
+  
+  followMiniBtn: {
+    position: 'absolute',
+    top: 0,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#4F46E5', // Roxo (Seguir)
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#374151', // Borda da cor do card para separar
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 2
+  },
+  followingMiniBtn: {
+    backgroundColor: '#10B981', // Verde (Seguindo)
+  },
   
   emptyText: { color: '#6B7280', fontStyle: 'italic' },
   astroRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10 },
@@ -549,14 +657,12 @@ const styles = StyleSheet.create({
   menuText: { color: '#FFF', fontSize: 14, fontWeight: '500' },
   menuDivider: { height: 1, backgroundColor: '#374151', marginVertical: 4 },
   
-  // MODAL STYLES (GENÉRICOS & MESSAGE)
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', backgroundColor: '#1F2937', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
   modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: 16 },
   modalTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
   modalText: { color: '#D1D5DB', textAlign: 'center', marginBottom: 20 },
   
-  // Specific Message Modal Styles
   recipientBox: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 16, backgroundColor: '#374151', padding: 8, borderRadius: 8 },
   recipientAvatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
   recipientText: { color: '#D1D5DB' },

@@ -1,14 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, 
-  ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Keyboard
+  ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Keyboard, StatusBar
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { ArrowLeft, Send, Lock, Star } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query'; 
+// Importando ferramenta para controlar a barra do Android
+import * as NavigationBar from 'expo-navigation-bar';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useGetConversationById } from '../features/chat/hooks/useChatQueries';
@@ -32,6 +34,26 @@ export const ChatConversationScreen = () => {
   const { mutate: hideMessage } = useHideMessageForMe();
 
   const isPaywallActive = user?.subscription?.status === 'FREE' && (user?.subscription?.freeContactsUsed ?? 0) >= 3;
+
+  // --- CORREÇÃO ANDROID: MODO IMERSIVO ---
+  useFocusEffect(
+    useCallback(() => {
+      const enableImmersiveMode = async () => {
+        if (Platform.OS === 'android') {
+          try {
+            // Esconde os botões virtuais para ganhar espaço
+            await NavigationBar.setVisibilityAsync('hidden');
+            await NavigationBar.setBehaviorAsync('overlay-swipe');
+            // Garante que o fundo da barra seja transparente caso ela apareça
+            await NavigationBar.setBackgroundColorAsync('#00000000'); 
+          } catch (e) {
+            console.log('Erro barra android', e);
+          }
+        }
+      };
+      enableImmersiveMode();
+    }, [])
+  );
 
   useEffect(() => {
     if (!socket) return;
@@ -96,7 +118,6 @@ export const ChatConversationScreen = () => {
         return (
             <TouchableOpacity 
                 style={[styles.bubble, styles.bubbleLeft, styles.blurredBubble]}
-                // CORRIGIDO: Rota 'Premium'
                 onPress={() => navigation.navigate('Premium')}
             >
                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
@@ -153,7 +174,6 @@ export const ChatConversationScreen = () => {
                 {isPaywallActive ? (
                     <TouchableOpacity 
                         style={styles.premiumFooter} 
-                        // CORRIGIDO: Rota 'Premium'
                         onPress={() => navigation.navigate('Premium')}
                     >
                         <Star size={20} color="#FFF" fill="#FFF" />

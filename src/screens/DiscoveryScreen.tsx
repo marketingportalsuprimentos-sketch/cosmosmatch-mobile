@@ -16,7 +16,7 @@ import Animated, {
   runOnJS,
   withTiming,
 } from 'react-native-reanimated';
-// Importando ferramenta para esconder a barra do Android
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
 
 import { useDiscoveryQueue } from '../features/discovery/hooks/useDiscoveryQueue';
@@ -45,15 +45,7 @@ const CustomToast = ({ message, visible, icon }: { message: string, visible: boo
 
 // --- CARTÃO ---
 function DiscoveryCard({ 
-    profile, 
-    onSwipeRight, 
-    onSwipeLeft, 
-    onSearchTap, 
-    isKeyboardVisible, 
-    activeInput, 
-    onConnectPress, 
-    isConnected, 
-    onNamePress 
+    profile, onSwipeRight, onSwipeLeft, onSearchTap, isKeyboardVisible, activeInput, onConnectPress, isConnected, onNamePress 
 }: any) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -109,33 +101,21 @@ function DiscoveryCard({
         </View>
         {!shouldHideFooter && (
           <View style={styles.bottomContainer}>
-             
              <TouchableOpacity onPress={onNamePress} activeOpacity={0.7}>
                 <Text style={styles.nameText} numberOfLines={1}>
                     {name} <Ionicons name="chevron-forward" size={20} color="white" style={{ opacity: 0.7 }} />
                 </Text>
              </TouchableOpacity>
-
              <View style={styles.locationRow}>
                 <Ionicons name="location-sharp" size={16} color="#E5E7EB" />
                 <Text style={styles.locationText} numberOfLines={1}>{city}</Text>
              </View>
-             
              <TouchableOpacity 
                 style={[styles.connectButton, isConnected && styles.likedButton]} 
-                onPress={onConnectPress} 
-                activeOpacity={0.9}
-                disabled={isConnected} 
+                onPress={onConnectPress} activeOpacity={0.9} disabled={isConnected} 
              >
-                <Ionicons 
-                    name={isConnected ? "checkmark-circle" : "person-add"} 
-                    size={20} 
-                    color="white" 
-                    style={{marginRight: 8}} 
-                />
-                <Text style={styles.connectButtonText}>
-                    {isConnected ? "Conectado" : "Conectar"}
-                </Text>
+                <Ionicons name={isConnected ? "checkmark-circle" : "person-add"} size={20} color="white" style={{marginRight: 8}} />
+                <Text style={styles.connectButtonText}>{isConnected ? "Conectado" : "Conectar"}</Text>
              </TouchableOpacity>
           </View>
         )}
@@ -151,7 +131,6 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
 
   const handleSend = async () => { 
       if (!msg.trim() || localLoading || isProcessing) return; 
-      
       setLocalLoading(true);
       try {
           await onSendMessage(msg); 
@@ -168,7 +147,6 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
         <TouchableOpacity style={styles.circleButton} onPress={onSkip} disabled={isProcessing || localLoading}>
             <Ionicons name="close" size={26} color="#9CA3AF" />
         </TouchableOpacity>
-
         <View style={styles.messageInputPill}>
           <TextInput 
             style={styles.inputMessage} 
@@ -192,12 +170,7 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
              )}
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity 
-            style={[styles.circleButton, {borderColor: isLiked ? '#A855F7' : '#A78BFA', backgroundColor: isLiked ? 'rgba(168, 85, 247, 0.2)' : 'rgba(31, 41, 55, 0.5)'}]} 
-            onPress={onLike} 
-            disabled={isProcessing || isLiked || localLoading}
-        >
+        <TouchableOpacity style={[styles.circleButton, {borderColor: isLiked ? '#A855F7' : '#A78BFA', backgroundColor: isLiked ? 'rgba(168, 85, 247, 0.2)' : 'rgba(31, 41, 55, 0.5)'}]} onPress={onLike} disabled={isProcessing || isLiked || localLoading}>
           <Ionicons name={isLiked ? "heart" : "heart-outline"} size={26} color={isLiked ? "#A855F7" : "#A78BFA"} />
         </TouchableOpacity>
     </View>
@@ -207,6 +180,8 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
 // --- TELA PRINCIPAL ---
 export default function DiscoveryScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets(); 
+  
   const [citySearch, setCitySearch] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [locationFilter, setLocationFilter] = useState<{ lat: number; lng: number } | null>(null);
@@ -216,36 +191,14 @@ export default function DiscoveryScreen() {
   const [activeInput, setActiveInput] = useState<'city' | 'message' | null>(null);
   
   const lastSearchRef = useRef('');
-
   const [isLikedCurrent, setIsLikedCurrent] = useState(false);
   const [isConnectedCurrent, setIsConnectedCurrent] = useState(false);
-  
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastIcon, setToastIcon] = useState('heart');
 
-  // --- CORREÇÃO 1: MODO IMERSIVO NO ANDROID ---
-  useFocusEffect(
-    React.useCallback(() => {
-      if (Platform.OS === 'android') {
-        // Esconde a barra de navegação (botões virtuais)
-        NavigationBar.setVisibilityAsync('hidden');
-        // Deixa a barra transparente para o app ocupar tudo
-        NavigationBar.setBehaviorAsync('overlay-swipe');
-      }
-      return () => {
-        if (Platform.OS === 'android') {
-          // Restaura ao sair da tela (opcional, mas recomendado)
-          NavigationBar.setVisibilityAsync('visible');
-        }
-      };
-    }, [])
-  );
-
   const showToast = (message: string, icon: string = 'heart') => { 
-      setToastMessage(message); 
-      setToastIcon(icon);
-      setToastVisible(true); 
+      setToastMessage(message); setToastIcon(icon); setToastVisible(true); 
       setTimeout(() => setToastVisible(false), 2500); 
   };
 
@@ -257,57 +210,32 @@ export default function DiscoveryScreen() {
 
   const { currentProfile, removeCurrentProfile, isQueueEmpty, isLoading, requiresProfile, refetchQueue } = useDiscoveryQueue({ locationFilter, cityName: selectedCityName });
 
-  useEffect(() => { 
-      setIsLikedCurrent(false); 
-      setIsConnectedCurrent(false);
-  }, [currentProfile?.userId]);
+  useEffect(() => { setIsLikedCurrent(false); setIsConnectedCurrent(false); }, [currentProfile?.userId]);
 
   const { like, sendIcebreaker, likeStatus } = useDiscoveryMutations();
   const { mutate: followUser } = useFollowUser(); 
-
   const isProcessing = likeStatus === 'pending';
 
   const handleOpenSearch = () => { navigation.navigate('SearchUsers'); };
-
-  const handleGoToProfile = () => {
-    if (currentProfile) {
-        navigation.navigate('PublicProfile', { userId: currentProfile.userId });
-    }
-  };
+  const handleGoToProfile = () => { if (currentProfile) navigation.navigate('PublicProfile', { userId: currentProfile.userId }); };
 
   const searchCity = async (text: string) => {
-    setCitySearch(text);
-    lastSearchRef.current = text; 
-
+    setCitySearch(text); lastSearchRef.current = text; 
     if (text.length === 0) { setLocationFilter(null); setSelectedCityName(undefined); }
-    
     if (text.length > 2) {
       try { 
           const { data } = await api.get<string[]>('/profile/autocomplete', { params: { input: text } }); 
-          if (lastSearchRef.current === text) {
-             setSuggestions(data || []); 
-          }
+          if (lastSearchRef.current === text) setSuggestions(data || []); 
       } catch (e) {}
-    } else { 
-        setSuggestions([]); 
-    }
+    } else { setSuggestions([]); }
   };
 
-  const selectSuggestion = (item: string) => { 
-      setCitySearch(item);
-      lastSearchRef.current = item; 
-      setSuggestions([]); 
-      handleSearchPress(item); 
-  };
+  const selectSuggestion = (item: string) => { setCitySearch(item); lastSearchRef.current = item; setSuggestions([]); handleSearchPress(item); };
 
   const handleSearchPress = async (cityOverride?: string) => {
     const cityToSearch = cityOverride || citySearch;
     if (!cityToSearch.trim()) return;
-    
-    setSuggestions([]); 
-    Keyboard.dismiss(); 
-    setIsSearching(true);
-    
+    setSuggestions([]); Keyboard.dismiss(); setIsSearching(true);
     try {
       const { data } = await api.get('/profile/geocode', { params: { city: cityToSearch } });
       if (data.lat && data.lng) { setLocationFilter(data); setSelectedCityName(cityToSearch); }
@@ -317,30 +245,17 @@ export default function DiscoveryScreen() {
 
   const handleLikePress = async () => {
     if (!currentProfile) return;
-    setIsLikedCurrent(true);
-    showToast("Like enviado! ❤️", "heart");
-    try {
-        await like(currentProfile.userId); 
-        setTimeout(() => removeCurrentProfile(), 500); 
-    } catch (error) {
-        setIsLikedCurrent(false);
-        Alert.alert("Erro", "Falha ao enviar like.");
-    }
+    setIsLikedCurrent(true); showToast("Like enviado! ❤️", "heart");
+    try { await like(currentProfile.userId); setTimeout(() => removeCurrentProfile(), 500); } 
+    catch (error) { setIsLikedCurrent(false); Alert.alert("Erro", "Falha ao enviar like."); }
   };
 
   const handleConnectPress = () => {
       if (!currentProfile) return;
-      setIsConnectedCurrent(true);
-      showToast("Você seguiu este usuário! 👤", "person-add");
-      
+      setIsConnectedCurrent(true); showToast("Você seguiu este usuário! 👤", "person-add");
       followUser(currentProfile.userId, {
-          onSuccess: () => {
-             setTimeout(() => removeCurrentProfile(), 800);
-          },
-          onError: () => {
-             setIsConnectedCurrent(false);
-             Alert.alert("Erro", "Falha ao seguir.");
-          }
+          onSuccess: () => { setTimeout(() => removeCurrentProfile(), 800); },
+          onError: () => { setIsConnectedCurrent(false); Alert.alert("Erro", "Falha ao seguir."); }
       });
   };
 
@@ -350,18 +265,12 @@ export default function DiscoveryScreen() {
         await sendIcebreaker({ userId: currentProfile.userId, content: message });
         showToast("Mensagem enviada! 🚀", "paper-plane");
     } catch (error: any) { 
-        if (error?.response?.status === 402) {
-             throw error; 
-        }
-        Alert.alert("Erro", "Falha no envio."); 
-        throw error;
+        if (error?.response?.status === 402) throw error; 
+        Alert.alert("Erro", "Falha no envio."); throw error;
     }
   };
 
-  const handleSwipeAction = () => { 
-      if (!currentProfile) return; 
-      removeCurrentProfile(); 
-  };
+  const handleSwipeAction = () => { if (!currentProfile) return; removeCurrentProfile(); };
 
   if (requiresProfile) {
     return (
@@ -376,8 +285,16 @@ export default function DiscoveryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <CustomToast message={toastMessage} visible={toastVisible} icon={toastIcon} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{flex: 1}} enabled={activeInput === 'message'} keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
-        <View style={styles.searchWrapper}>
+      
+      {/* --- CORREÇÃO AQUI: 'height' para Android --- */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{flex: 1}} 
+        enabled 
+        keyboardVerticalOffset={20}
+      >
+        
+        <View style={[styles.searchWrapper, { paddingTop: insets.top + 10 }]}>
             <View style={styles.headerContainer}>
               <View style={styles.inputWrapper}>
                 <Ionicons name="location" size={18} color="#9CA3AF" style={{marginRight: 8}} />
@@ -386,7 +303,7 @@ export default function DiscoveryScreen() {
               <TouchableOpacity style={styles.searchButton} onPress={() => handleSearchPress()}><Text style={styles.searchButtonText}>Filtrar</Text></TouchableOpacity>
             </View>
             {suggestions.length > 0 && (
-              <View style={styles.suggestionsList}>
+              <View style={[styles.suggestionsList, { top: insets.top + 65 }]}>
                 {suggestions.map((item, i) => (
                   <TouchableOpacity key={i} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}><Text style={{color:'#D1D5DB'}}>{item}</Text></TouchableOpacity>
                 ))}
@@ -407,32 +324,18 @@ export default function DiscoveryScreen() {
               )}
               {!isLoading && !isSearching && currentProfile && (
                 <DiscoveryCard 
-                    key={currentProfile.userId} 
-                    profile={currentProfile} 
-                    onSwipeRight={handleSwipeAction}
-                    onSwipeLeft={handleSwipeAction} 
-                    onSearchTap={handleOpenSearch} 
-                    
-                    onConnectPress={handleConnectPress} 
-                    isConnected={isConnectedCurrent}
-                    
-                    onNamePress={handleGoToProfile} 
-                    isKeyboardVisible={isKeyboardVisible} 
-                    activeInput={activeInput}
+                    key={currentProfile.userId} profile={currentProfile} 
+                    onSwipeRight={handleSwipeAction} onSwipeLeft={handleSwipeAction} 
+                    onSearchTap={handleOpenSearch} onConnectPress={handleConnectPress} 
+                    isConnected={isConnectedCurrent} onNamePress={handleGoToProfile} 
+                    isKeyboardVisible={isKeyboardVisible} activeInput={activeInput}
                 />
               )}
             </View>
         </TouchableWithoutFeedback>
 
         {!isQueueEmpty && (
-          <ActionFooter 
-             onSkip={handleSwipeAction} 
-             onLike={handleLikePress} 
-             onSendMessage={handleSendMessage} 
-             isProcessing={isProcessing} 
-             onFocusMsg={() => setActiveInput('message')}
-             isLiked={isLikedCurrent}
-          />
+          <ActionFooter onSkip={handleSwipeAction} onLike={handleLikePress} onSendMessage={handleSendMessage} isProcessing={isProcessing} onFocusMsg={() => setActiveInput('message')} isLiked={isLikedCurrent} />
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -442,28 +345,15 @@ export default function DiscoveryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
   centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827' },
-  
-  searchWrapper: { zIndex: 999, elevation: 999 },
-  
-  // --- CORREÇÃO 2: PADDING TOP SÓ NO ANDROID ---
-  headerContainer: { 
-      flexDirection: 'row', 
-      paddingHorizontal: 16, 
-      paddingBottom: 10, 
-      alignItems: 'center', 
-      backgroundColor: '#111827',
-      // Se for Android, empurra para baixo da barra de status
-      paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 30) + 10 : 10 
-  },
-  
+  searchWrapper: { zIndex: 999, elevation: 999, backgroundColor: '#111827' },
+  headerContainer: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 10, alignItems: 'center' },
   inputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A', borderRadius: 25, paddingHorizontal: 12, height: 45, marginRight: 10, borderWidth: 1, borderColor: '#374151' },
   input: { flex: 1, color: 'white' },
   searchButton: { backgroundColor: '#5B21B6', paddingHorizontal: 16, height: 45, borderRadius: 25, justifyContent: 'center' },
   searchButtonText: { color: 'white', fontWeight: 'bold' },
-  suggestionsList: { position: 'absolute', top: 60, left: 16, right: 90, backgroundColor: '#1F2937', borderRadius: 10, zIndex: 1000, borderWidth: 1, borderColor:'#374151', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
+  suggestionsList: { position: 'absolute', left: 16, right: 90, backgroundColor: '#1F2937', borderRadius: 10, zIndex: 1000, borderWidth: 1, borderColor:'#374151', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
   suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#374151' },
   contentContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', zIndex: 1, paddingBottom: 20 },
-  
   card: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 24, backgroundColor: '#1F2937', overflow: 'hidden', position: 'absolute', elevation: 10, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 10 },
   image: { width: '100%', height: '100%' },
   gradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' },
@@ -473,14 +363,12 @@ const styles = StyleSheet.create({
   affinityScore: { color: '#C084FC', fontWeight: 'bold' },
   searchIconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   bottomContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20 },
-  
   nameText: { color: 'white', fontSize: 28, fontWeight: 'bold', marginBottom: 4, flexDirection: 'row', alignItems: 'center' },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   locationText: { color: '#E5E7EB', fontSize: 15, marginLeft: 6 },
   connectButton: { backgroundColor: '#6366F1', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 14, borderRadius: 14, width: '100%', shadowColor: "#6366F1", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 5 },
   likedButton: { backgroundColor: '#374151', borderWidth: 1, borderColor: '#A855F7', shadowColor: "transparent" },
   connectButtonText: { color: 'white', fontSize: 17, fontWeight: 'bold' },
-
   footerContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 10, height: 80, zIndex: 100, elevation: 100, backgroundColor: '#111827' },
   circleButton: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(31, 41, 55, 0.5)', borderWidth: 1, borderColor: '#374151' },
   messageInputPill: { flex: 1, marginHorizontal: 12, height: 50, borderRadius: 25, backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, justifyContent: 'space-between' },

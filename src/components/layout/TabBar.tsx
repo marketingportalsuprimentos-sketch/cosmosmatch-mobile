@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Sparkles, Home, MessageCircle, User, Plus } from 'lucide-react-native';
 
-// Agora os hooks existem e funcionam!
+// Import dos hooks de contadores
 import { useGetUnreadLikesCount, useGetUnreadMessageCount } from '../../hooks/useBadges';
 
 export const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
@@ -95,7 +95,7 @@ export const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) =>
                   strokeWidth={isFocused ? 2.5 : 2}
                 />
                 
-                {/* BADGE DE NOTIFICAÇÃO NO CHAT */}
+                {/* BADGE DE NOTIFICAÇÃO */}
                 {route.name === 'ChatTab' && totalUnreadCount > 0 && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
@@ -121,11 +121,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827', 
     borderTopWidth: 1,
     borderTopColor: '#374151', 
+    // No iOS o paddingBottom já é tratado pelo SafeArea, no Android as vezes precisa de um respiro
     paddingBottom: Platform.OS === 'ios' ? 20 : 0, 
   },
   content: {
     flexDirection: 'row',
-    height: 64, 
+    // --- AJUSTE DE ALTURA ---
+    // iOS: 64 (Padrão)
+    // Android: 78 (Mais alto, +20% aprox)
+    height: Platform.OS === 'android' ? 78 : 64, 
     alignItems: 'center',
     justifyContent: 'space-around',
   },
@@ -144,22 +148,28 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   plusButtonContainer: {
-    top: -20, 
+    top: -24, // Subi um pouco mais para compensar a altura nova
     justifyContent: 'center',
     alignItems: 'center',
   },
   plusButton: {
-    width: 56, 
-    height: 56,
-    borderRadius: 28, 
+    width: 60, // Aumentei levemente (era 56)
+    height: 60,
+    borderRadius: 30, 
     backgroundColor: '#8B5CF6', 
     justifyContent: 'center',
     alignItems: 'center',
+    
+    // --- SOMBRA IOS (Glow Colorido) ---
     shadowColor: "#8B5CF6",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 8,
-    elevation: 5,
+    
+    // --- SOMBRA ANDROID (Profundidade) ---
+    // Aumentei para 10 para ele "saltar" da tela
+    elevation: 10, 
+    
     borderWidth: 4,
     borderColor: '#111827', 
   },

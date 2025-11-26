@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler'; 
+import * as NavigationBar from 'expo-navigation-bar'; // Importante para controlar a barra
 
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'; 
 
@@ -34,7 +35,6 @@ import { PremiumScreen } from './src/screens/PremiumScreen';
 
 import { TabBar } from './src/components/layout/TabBar';
 
-// --- IMPORTAÇÃO ADICIONADA ---
 import { navigationRef } from './src/navigation/navigationRef'; 
 
 const queryClient = new QueryClient();
@@ -104,14 +104,34 @@ const AppNavigator = () => {
 };
 
 export default function App() {
+  
+  // --- CONFIGURAÇÃO GLOBAL: MODO IMERSIVO NO ANDROID ---
+  useEffect(() => {
+    const configureImmersiveMode = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          // Esconde a barra de navegação (botões virtuais)
+          await NavigationBar.setVisibilityAsync('hidden');
+          // Permite que ela apareça se o usuário deslizar (como em jogos)
+          await NavigationBar.setBehaviorAsync('overlay-swipe');
+          // Garante fundo transparente
+          await NavigationBar.setBackgroundColorAsync('#00000000');
+        } catch (e) {
+          console.log("Erro ao configurar barra imersiva:", e);
+        }
+      }
+    };
+    configureImmersiveMode();
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <SafeAreaProvider>
-            {/* --- REFERÊNCIA ADICIONADA AQUI --- */}
             <NavigationContainer ref={navigationRef}>
-              <StatusBar style="light" />
+              {/* StatusBar configurada para combinar com o tema escuro */}
+              <StatusBar style="light" translucent backgroundColor="transparent" />
               <AppNavigator />
             </NavigationContainer>
           </SafeAreaProvider>

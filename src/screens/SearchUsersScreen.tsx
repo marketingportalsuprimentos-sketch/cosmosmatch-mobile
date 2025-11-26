@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, TextInput, FlatList, TouchableOpacity, Image, StyleSheet, ActivityIndicator, SafeAreaView, Keyboard 
+  View, Text, TextInput, FlatList, TouchableOpacity, Image, StyleSheet, ActivityIndicator, Keyboard, Platform 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+// Importando a ferramenta para medir o topo exato
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; 
 import { api } from '../services/api';
 
 // Tipo igual ao da Web (UserSearchResult)
@@ -19,6 +21,8 @@ type SearchUser = {
 
 export function SearchUsersScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets(); // Hook para pegar altura do relógio/status bar
+  
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +36,6 @@ export function SearchUsersScreen() {
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
-        // --- CORREÇÃO: Usando a rota exata da Web ---
         const { data } = await api.get<SearchUser[]>('/social/search-users', { 
           params: { q: query } 
         });
@@ -42,13 +45,12 @@ export function SearchUsersScreen() {
       } finally {
         setIsLoading(false);
       }
-    }, 500); // Debounce de 500ms (igual Web)
+    }, 500); 
 
     return () => clearTimeout(timer);
   }, [query]);
 
   const handleUserTap = (userId: string) => {
-    // Navega para o perfil público
     navigation.navigate('PublicProfile', { userId });
   };
 
@@ -77,9 +79,13 @@ export function SearchUsersScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header de Busca */}
-      <View style={styles.header}>
+    <View style={styles.container}>
+      {/* Header de Busca com Padding Dinâmico */}
+      <View style={[
+          styles.header, 
+          // Se for Android, soma o inset do topo + 10px. Se for iOS, o inset já resolve.
+          { paddingTop: insets.top + (Platform.OS === 'android' ? 10 : 0) }
+      ]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
@@ -115,7 +121,7 @@ export function SearchUsersScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="handled" // Importante para clicar sem fechar teclado
+          keyboardShouldPersistTaps="handled" 
           ListEmptyComponent={
             query.length >= 2 ? (
               <View style={styles.center}>
@@ -134,7 +140,7 @@ export function SearchUsersScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -143,7 +149,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', padding: 16,
     borderBottomWidth: 1, borderBottomColor: '#1F2937',
-    paddingTop: 10
+    // PaddingTop removido daqui e passado via style inline dinâmico
+    paddingBottom: 15
   },
   backButton: { marginRight: 12 },
   inputContainer: {
@@ -156,7 +163,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 40 },
   emptyText: { color: '#9CA3AF', textAlign: 'center', fontSize: 16, fontWeight: 'bold' },
   
-  // User Item
   userItem: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#1F2937', padding: 12, marginBottom: 10, borderRadius: 12,

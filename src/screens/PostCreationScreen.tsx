@@ -10,10 +10,12 @@ import { useCreatePost } from '../features/feed/hooks/useFeed';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
 
-// Ignora aviso de deprecated
-LogBox.ignoreLogs(['Video component from `expo-av` is deprecated']);
+LogBox.ignoreLogs(['Video component from `expo-av` is deprecated', 'MediaTypeOptions']);
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Limite de tempo (23 segundos)
+const MAX_VIDEO_DURATION = 23; 
 
 export default function PostCreationScreen() {
   const navigation = useNavigation<any>();
@@ -25,11 +27,16 @@ export default function PostCreationScreen() {
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
 
   const processMedia = (asset: ImagePicker.ImagePickerAsset) => {
+    console.log('Mídia processada:', asset.type, 'Tamanho:', asset.fileSize, 'Duração:', asset.duration);
+    
     if (asset.type === 'video') {
       const durationSec = (asset.duration || 0) / 1000; 
-      // Validação de 3 a 7 segundos
-      if (durationSec > 0 && (durationSec < 3 || durationSec > 7)) { 
-         Alert.alert("Vídeo inválido", "O vídeo deve ter entre 3 e 6 segundos.");
+      
+      if (durationSec > (MAX_VIDEO_DURATION + 3)) { 
+         Alert.alert(
+             "Vídeo muito longo", 
+             `O limite é de ${MAX_VIDEO_DURATION} segundos. Escolha um vídeo mais curto.`
+         );
          return;
       }
       setVideoDuration(durationSec);
@@ -42,43 +49,94 @@ export default function PostCreationScreen() {
   };
 
   const openGallery = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      aspect: [9, 16],
-      quality: 0.8,
-      videoMaxDuration: 6,
-    });
-    if (!result.canceled) processMedia(result.assets[0]);
-  };
-
-  const openCamera = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert("Permissão", "Você precisa permitir o acesso à câmera.");
-      return;
+    try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.All,
+            allowsEditing: false, 
+            quality: 0.6, 
+            videoMaxDuration: MAX_VIDEO_DURATION,
+        });
+        if (!result.canceled) processMedia(result.assets[0]);
+    } catch (error) {
+        Alert.alert("Erro", "Não foi possível abrir a galeria.");
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      aspect: [9, 16],
-      quality: 0.8,
-      videoMaxDuration: 6,
-    });
-    if (!result.canceled) processMedia(result.assets[0]);
   };
 
+  const openCamera = async (mode: 'photo' | 'video') => {
+    try {
+        const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
+        
+        if (cameraPerm.status !== 'granted') {
+            Alert.alert("Permissão Negada", "Ative a permissão da câmera nas configurações.");
+            return;
+        }
+
+        console.log(`Abrindo câmera no modo: ${mode}`);
+        
+        const mediaTypes = mode === 'video' 
+            ? ImagePicker.MediaTypeOptions.Videos 
+            : ImagePicker.MediaTypeOptions.Images;
+
+        let result;
+
+        if (mode === 'video') {
+            result = await ImagePicker.launchCameraAsync({
+                mediaTypes: mediaTypes,
+                allowsEditing: false,
+                // Qualidade média = Arquivos menores que passam no servidor
+                videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+                quality: 0.6,
+                videoMaxDuration: MAX_VIDEO_DURATION, 
+            });
+        } else {
+            result = await ImagePicker.launchCameraAsync({
+                mediaTypes: mediaTypes,
+                allowsEditing: false,
+                quality: 0.5, 
+                exif: false,
+            });
+        }
+
+        if (!result.canceled) {
+            processMedia(result.assets[0]);
+        }
+
+    } catch (error) {
+        console.error("Erro Câmera:", error);
+        const errorMsg = (error as any)?.message || "Erro desconhecido";
+        Alert.alert("Erro", `Não foi possível capturar: ${errorMsg}`);
+    }
+  };
+
+  // --- CORREÇÃO PRINCIPAL NO UPLOAD ---
   const handlePost = () => {
     if (!mediaUri) return;
 
     const formData = new FormData();
-    const filename = mediaUri.split('/').pop() || 'upload.jpg';
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `${mediaType}/${match[1]}` : (mediaType === 'video' ? 'video/mp4' : 'image/jpeg');
+
+    // 1. Força o nome e tipo corretos (Evita erro 400 no Android)
+    let filename = mediaUri.split('/').pop() || 'upload';
+    let type = '';
+
+    if (mediaType === 'video') {
+        // Se não tiver extensão ou for estranha, força .mp4
+        if (!filename.toLowerCase().endsWith('.mp4')) {
+            filename = `${filename}.mp4`;
+        }
+        type = 'video/mp4';
+    } else {
+        if (!filename.toLowerCase().endsWith('.jpg') && !filename.toLowerCase().endsWith('.png')) {
+            filename = `${filename}.jpg`;
+        }
+        type = 'image/jpeg';
+    }
+
+    console.log('Enviando:', { uri: mediaUri, name: filename, type });
 
     // @ts-ignore
     formData.append('file', { uri: mediaUri, name: filename, type });
     formData.append('mediaType', mediaType === 'video' ? 'VIDEO' : 'PHOTO');
+    
     if (caption) formData.append('content', caption);
     if (videoDuration) formData.append('videoDuration', Math.round(videoDuration).toString());
 
@@ -90,8 +148,18 @@ export default function PostCreationScreen() {
         setMediaType(null);
         navigation.navigate('FeedTab');
       },
-      onError: () => {
-        Alert.alert("Erro", "Falha ao publicar. Tente novamente.");
+      onError: (error: any) => {
+        console.log('Erro detalhado upload:', error.response?.data || error.message);
+        
+        // Se for erro 400, pode ser validação de campo
+        if (error.response?.status === 400) {
+             const msg = error.response?.data?.message;
+             // Verifica se é erro de DTO (array de erros) ou mensagem simples
+             const alerta = Array.isArray(msg) ? msg[0] : msg || "Dados inválidos.";
+             Alert.alert("Erro no envio", `O servidor recusou: ${alerta}`);
+        } else {
+             Alert.alert("Erro", "Falha ao publicar. Verifique sua conexão.");
+        }
       }
     });
   };
@@ -103,7 +171,7 @@ export default function PostCreationScreen() {
     navigation.goBack();
   };
 
-  // --- ESTADO 1: SELEÇÃO DE MÍDIA ---
+  // --- RENDER ---
   if (!mediaUri) {
     return (
       <View style={styles.container}>
@@ -117,31 +185,38 @@ export default function PostCreationScreen() {
         </View>
 
         <View style={styles.actionsContainer}>
-           <Text style={styles.instructionText}>Compartilhe seu momento ✨</Text>
-           <TouchableOpacity style={styles.bigButton} onPress={openCamera}>
-              <LinearGradient colors={['#EC4899', '#8B5CF6']} style={styles.gradientButton}>
-                 <Ionicons name="camera-outline" size={32} color="white" />
-                 <Text style={styles.bigButtonText}>Abrir Câmera</Text>
+           <Text style={styles.instructionText}>O que vamos postar hoje? ✨</Text>
+           
+           <TouchableOpacity style={styles.bigButton} onPress={() => openCamera('photo')}>
+              <LinearGradient colors={['#EC4899', '#DB2777']} style={styles.gradientButton}>
+                 <Ionicons name="camera" size={32} color="white" />
+                 <Text style={styles.bigButtonText}>Tirar Foto</Text>
               </LinearGradient>
            </TouchableOpacity>
+
+           <TouchableOpacity style={styles.bigButton} onPress={() => openCamera('video')}>
+              <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.gradientButton}>
+                 <Ionicons name="videocam" size={32} color="white" />
+                 <Text style={styles.bigButtonText}>Gravar Vídeo</Text>
+              </LinearGradient>
+           </TouchableOpacity>
+
            <TouchableOpacity style={styles.bigButton} onPress={openGallery}>
               <LinearGradient colors={['#374151', '#1F2937']} style={styles.gradientButton}>
-                 <Ionicons name="images-outline" size={32} color="white" />
-                 <Text style={styles.bigButtonText}>Galeria</Text>
+                 <Ionicons name="images" size={32} color="white" />
+                 <Text style={styles.bigButtonText}>Abrir Galeria</Text>
               </LinearGradient>
            </TouchableOpacity>
-           <Text style={styles.hintText}>Vídeos curtos (3-6s)</Text>
+           
+           <Text style={styles.hintText}>Vídeos até {MAX_VIDEO_DURATION} segundos</Text>
         </View>
       </View>
     );
   }
 
-  // --- ESTADO 2: PREVIEW E LEGENDA ---
   return (
     <View style={styles.container}>
         <StatusBar hidden />
-        
-        {/* CAMADA 1: MÍDIA (Fica no fundo) */}
         <View style={styles.mediaLayer}>
             {mediaType === 'video' ? (
                 <Video
@@ -153,31 +228,17 @@ export default function PostCreationScreen() {
                     isMuted={false}
                 />
             ) : (
-                <Image 
-                    source={{ uri: mediaUri }} 
-                    style={styles.fullScreenMedia} 
-                    resizeMode="cover" 
-                />
+                <Image source={{ uri: mediaUri }} style={styles.fullScreenMedia} resizeMode="cover" />
             )}
         </View>
 
-        {/* CAMADA 2: INTERFACE (Fica por cima) */}
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.interfaceLayer}
-        >
-            <LinearGradient
-               colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.8)']}
-               style={styles.gradientOverlay}
-            >
-               {/* Botão Fechar */}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.interfaceLayer}>
+            <LinearGradient colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.8)']} style={styles.gradientOverlay}>
                <View style={styles.topBar}>
                    <TouchableOpacity style={styles.closeButton} onPress={handleCancel}>
                       <Ionicons name="close-circle" size={40} color="white" />
                    </TouchableOpacity>
                </View>
-
-               {/* Área Inferior */}
                <View style={styles.bottomArea}>
                   <Text style={styles.label}>Legenda</Text>
                   <TextInput
@@ -189,17 +250,8 @@ export default function PostCreationScreen() {
                     value={caption}
                     onChangeText={setCaption}
                   />
-
-                  <TouchableOpacity 
-                    style={[styles.postButton, isPending && styles.disabledButton]} 
-                    onPress={handlePost}
-                    disabled={isPending}
-                  >
-                     {isPending ? (
-                        <ActivityIndicator color="white" />
-                     ) : (
-                        <Text style={styles.postButtonText}>Publicar ✨</Text>
-                     )}
+                  <TouchableOpacity style={[styles.postButton, isPending && styles.disabledButton]} onPress={handlePost} disabled={isPending}>
+                     {isPending ? <ActivityIndicator color="white" /> : <Text style={styles.postButtonText}>Publicar ✨</Text>}
                   </TouchableOpacity>
                </View>
             </LinearGradient>
@@ -210,44 +262,23 @@ export default function PostCreationScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'black' },
-  
-  // Seleção
   header: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, paddingTop: 60, alignItems: 'center' },
   headerTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   actionsContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 20, paddingBottom: 100 },
   instructionText: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
-  bigButton: { width: 250, height: 60, borderRadius: 30, overflow: 'hidden' },
+  bigButton: { width: 280, height: 60, borderRadius: 30, overflow: 'hidden' },
   gradientButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   bigButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
   hintText: { color: '#6B7280', marginTop: 10 },
-
-  // Preview Layout
-  mediaLayer: {
-    ...StyleSheet.absoluteFillObject, // Ocupa tela toda
-    zIndex: 0,
-  },
-  fullScreenMedia: {
-    width: '100%',
-    height: '100%',
-  },
-  
-  interfaceLayer: {
-    flex: 1,
-    zIndex: 1, // Fica acima da mídia
-  },
-  gradientOverlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: 20,
-  },
-  
+  mediaLayer: { ...StyleSheet.absoluteFillObject, zIndex: 0 },
+  fullScreenMedia: { width: '100%', height: '100%' },
+  interfaceLayer: { flex: 1, zIndex: 1 },
+  gradientOverlay: { flex: 1, justifyContent: 'space-between', padding: 20 },
   topBar: { paddingTop: 40, alignSelf: 'flex-start' },
   closeButton: { padding: 5, shadowColor: 'black', shadowOpacity: 0.5, shadowRadius: 5 },
-  
   bottomArea: { width: '100%', paddingBottom: 20 },
   label: { color: 'white', fontWeight: 'bold', marginBottom: 10, textShadowColor:'black', textShadowRadius: 5 },
   input: { backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 15, padding: 15, color: 'white', fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  
   postButton: { backgroundColor: '#8B5CF6', padding: 15, borderRadius: 30, alignItems: 'center', shadowColor: "#8B5CF6", shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.5, shadowRadius: 5 },
   disabledButton: { opacity: 0.7 },
   postButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 }
