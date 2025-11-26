@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler'; 
-import * as NavigationBar from 'expo-navigation-bar'; // Importante para controlar a barra
+import * as NavigationBar from 'expo-navigation-bar'; 
 
 import { AuthProvider, useAuth } from './src/contexts/AuthContext'; 
 
@@ -34,8 +34,11 @@ import BlockedProfilesScreen from './src/screens/BlockedProfilesScreen';
 import { PremiumScreen } from './src/screens/PremiumScreen';
 
 import { TabBar } from './src/components/layout/TabBar';
-
 import { navigationRef } from './src/navigation/navigationRef'; 
+
+// --- IMPORTAÇÃO DE IDIOMAS (ESSENCIAL) ---
+import './src/i18n'; 
+// ------------------------------------------
 
 const queryClient = new QueryClient();
 const Stack = createNativeStackNavigator();
@@ -110,11 +113,8 @@ export default function App() {
     const configureImmersiveMode = async () => {
       if (Platform.OS === 'android') {
         try {
-          // Esconde a barra de navegação (botões virtuais)
           await NavigationBar.setVisibilityAsync('hidden');
-          // Permite que ela apareça se o usuário deslizar (como em jogos)
           await NavigationBar.setBehaviorAsync('overlay-swipe');
-          // Garante fundo transparente
           await NavigationBar.setBackgroundColorAsync('#00000000');
         } catch (e) {
           console.log("Erro ao configurar barra imersiva:", e);
@@ -130,7 +130,6 @@ export default function App() {
         <AuthProvider>
           <SafeAreaProvider>
             <NavigationContainer ref={navigationRef}>
-              {/* StatusBar configurada para combinar com o tema escuro */}
               <StatusBar style="light" translucent backgroundColor="transparent" />
               <AppNavigator />
             </NavigationContainer>
