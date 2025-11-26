@@ -1,7 +1,8 @@
+// ... (Imports anteriores mantidos)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, 
-  ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Keyboard, StatusBar
+  ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Keyboard
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -9,8 +10,8 @@ import { ArrowLeft, Send, Lock, Star } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query'; 
-// Importando ferramenta para controlar a barra do Android
 import * as NavigationBar from 'expo-navigation-bar';
+import { useTranslation } from 'react-i18next'; // <--- I18N
 
 import { useAuth } from '../contexts/AuthContext';
 import { useGetConversationById } from '../features/chat/hooks/useChatQueries';
@@ -21,6 +22,7 @@ export const ChatConversationScreen = () => {
   const route = useRoute<any>();
   const queryClient = useQueryClient(); 
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation(); // <--- HOOK
   
   const { chatId, targetName, targetPhoto } = route.params;
   const { user, socket } = useAuth(); 
@@ -35,26 +37,22 @@ export const ChatConversationScreen = () => {
 
   const isPaywallActive = user?.subscription?.status === 'FREE' && (user?.subscription?.freeContactsUsed ?? 0) >= 3;
 
-  // --- CORREÇÃO ANDROID: MODO IMERSIVO ---
   useFocusEffect(
     useCallback(() => {
       const enableImmersiveMode = async () => {
         if (Platform.OS === 'android') {
           try {
-            // Esconde os botões virtuais para ganhar espaço
             await NavigationBar.setVisibilityAsync('hidden');
             await NavigationBar.setBehaviorAsync('overlay-swipe');
-            // Garante que o fundo da barra seja transparente caso ela apareça
             await NavigationBar.setBackgroundColorAsync('#00000000'); 
-          } catch (e) {
-            console.log('Erro barra android', e);
-          }
+          } catch (e) { console.log('Erro barra android', e); }
         }
       };
       enableImmersiveMode();
     }, [])
   );
 
+  // ... (Socket useEffect mantido igual) ...
   useEffect(() => {
     if (!socket) return;
     const handleNewMessage = (message: any) => {
@@ -83,28 +81,20 @@ export const ChatConversationScreen = () => {
 
     if (isMe) {
       Alert.alert(
-        'Opções da Mensagem',
-        'Deseja apagar esta mensagem para TODOS?',
+        t('chat_options_title'),
+        t('chat_delete_everyone_confirm'),
         [
-          { text: 'Cancelar', style: 'cancel' },
-          { 
-            text: 'Apagar para Todos', 
-            style: 'destructive',
-            onPress: () => deleteMessage(msg.id)
-          }
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('chat_delete_everyone'), style: 'destructive', onPress: () => deleteMessage(msg.id) }
         ]
       );
     } else {
       Alert.alert(
-        'Opções da Mensagem',
-        'Deseja esconder esta mensagem da sua lista?',
+        t('chat_options_title'),
+        t('chat_hide_me_confirm'),
         [
-          { text: 'Cancelar', style: 'cancel' },
-          { 
-            text: 'Esconder para Mim', 
-            style: 'destructive',
-            onPress: () => hideMessage({ messageId: msg.id, conversationId: chatId })
-          }
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('chat_hide_me'), style: 'destructive', onPress: () => hideMessage({ messageId: msg.id, conversationId: chatId }) }
         ]
       );
     }
@@ -122,8 +112,9 @@ export const ChatConversationScreen = () => {
             >
                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
                     <Lock size={16} color="#A78BFA" />
-                    <Text style={styles.blurredTitle}>Mensagem Oculta</Text>
+                    <Text style={styles.blurredTitle}>{t('message_hidden_premium')}</Text>
                 </View>
+                <Text style={styles.blurredText}>{t('premium_blur_message')}</Text>
             </TouchableOpacity>
         );
     }
@@ -148,7 +139,9 @@ export const ChatConversationScreen = () => {
                 <ArrowLeft size={24} color="#FFF" />
             </TouchableOpacity>
             <Image source={{ uri: targetPhoto || 'https://via.placeholder.com/100' }} style={styles.avatar} />
-            <Text style={styles.headerName}>{targetName || 'Chat'}</Text>
+            <View style={styles.headerInfo}>
+                <Text style={styles.headerName}>{targetName || t('user_default')}</Text>
+            </View>
         </View>
 
         <View style={styles.chatArea}>
@@ -166,30 +159,25 @@ export const ChatConversationScreen = () => {
             )}
         </View>
 
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
             <View style={{ paddingBottom: Math.max(insets.bottom, 20), backgroundColor: '#111827' }}>
                 {isPaywallActive ? (
-                    <TouchableOpacity 
-                        style={styles.premiumFooter} 
-                        onPress={() => navigation.navigate('Premium')}
-                    >
+                    <TouchableOpacity style={styles.premiumFooter} onPress={() => navigation.navigate('Premium')} activeOpacity={0.9}>
                         <Star size={20} color="#FFF" fill="#FFF" />
-                        <Text style={styles.premiumFooterText}>Assine o Premium</Text>
+                        <Text style={styles.premiumFooterText}>{t('premium_blur_footer')}</Text>
                     </TouchableOpacity>
                 ) : (
                     <View style={styles.inputContainer}>
                         <TextInput
                             style={styles.input}
-                            placeholder="Mensagem..."
+                            placeholder={t('send_message_placeholder')}
                             placeholderTextColor="#6B7280"
                             value={newMessage}
                             onChangeText={setNewMessage}
+                            multiline
                         />
-                        <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-                            {isSending ? <ActivityIndicator size="small" color="#FFF" /> : <Send size={20} color="#FFF" />}
+                        <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={!newMessage.trim() || isSending}>
+                            {isSending ? <ActivityIndicator size="small" color="#FFF" /> : <Send size={20} color="#FFF" style={{marginLeft: 2}} />}
                         </TouchableOpacity>
                     </View>
                 )}
@@ -204,19 +192,21 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: '#111827', borderBottomWidth: 1, borderBottomColor: '#1F2937' },
   backButton: { marginRight: 15 },
   avatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
+  headerInfo: { flex: 1 },
   headerName: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   chatArea: { flex: 1, backgroundColor: '#0F172A' },
   listContent: { padding: 15, paddingBottom: 20 },
-  bubble: { maxWidth: '80%', padding: 10, borderRadius: 8, marginBottom: 12 },
-  bubbleRight: { alignSelf: 'flex-end', backgroundColor: '#4F46E5' },
-  bubbleLeft: { alignSelf: 'flex-start', backgroundColor: '#1F2937' },
-  blurredBubble: { backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 1, borderColor: '#8B5CF6', borderStyle: 'dashed' },
-  blurredTitle: { color: '#A78BFA', fontWeight: 'bold' },
-  messageText: { fontSize: 15, color: '#FFF' },
+  bubble: { maxWidth: '80%', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, marginBottom: 12 },
+  bubbleRight: { alignSelf: 'flex-end', backgroundColor: '#4F46E5', borderBottomRightRadius: 2 },
+  bubbleLeft: { alignSelf: 'flex-start', backgroundColor: '#1F2937', borderBottomLeftRadius: 2 },
+  blurredBubble: { backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 1, borderColor: '#8B5CF6', borderStyle: 'dashed', paddingVertical: 15 },
+  blurredTitle: { color: '#A78BFA', fontWeight: 'bold', fontSize: 14 },
+  blurredText: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },
+  messageText: { fontSize: 15, lineHeight: 22, color: '#FFF' },
   timeText: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end', color: 'rgba(255,255,255,0.6)' },
-  inputContainer: { flexDirection: 'row', padding: 12, borderTopWidth: 1, borderColor: '#1F2937', alignItems: 'center' },
-  input: { flex: 1, backgroundColor: '#374151', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, color: '#FFF', marginRight: 10 },
+  inputContainer: { flexDirection: 'row', padding: 12, backgroundColor: '#111827', borderTopWidth: 1, borderTopColor: '#1F2937', alignItems: 'flex-end' },
+  input: { flex: 1, backgroundColor: '#374151', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, color: '#FFF', fontSize: 15, marginRight: 10 },
   sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' },
-  premiumFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7C3AED', padding: 16, margin: 12, borderRadius: 30, gap: 8 },
-  premiumFooterText: { color: '#FFF', fontWeight: 'bold' }
+  premiumFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7C3AED', paddingVertical: 16, margin: 12, borderRadius: 30, gap: 8, shadowColor: "#7C3AED", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4.65, elevation: 8 },
+  premiumFooterText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 }
 });

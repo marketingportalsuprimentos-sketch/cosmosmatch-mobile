@@ -1,5 +1,3 @@
-// src/screens/EditProfileScreen.tsx
-
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, 
@@ -10,33 +8,30 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ArrowLeft, Info, Lock, Camera, ChevronDown, Check, X } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next'; // <--- I18N
 
 import { useGetMyProfile, useUpdateProfile, useUpdateAvatar } from '../features/profile/hooks/useProfile';
 import { UpdateProfileDto } from '../types/profile.types';
 import { CityAutocomplete } from '../components/ui/CityAutocomplete';
 
-// --- CORREÇÃO: Silenciar o aviso de listas aninhadas ---
-// O Google Autocomplete usa uma FlatList interna. Dentro de um ScrollView, o React Native
-// gera um aviso. Como desativamos o scroll da lista interna (scrollEnabled={false}),
-// podemos ignorar este aviso com segurança para limpar a tela.
 LogBox.ignoreLogs(['VirtualizedLists should never be nested']);
-
-const GENDER_OPTIONS = [
-  { label: 'Masculino', value: 'MALE' },
-  { label: 'Feminino', value: 'FEMALE' },
-  { label: 'Não-Binário', value: 'NON_BINARY' },
-  { label: 'Outro', value: 'OTHER' },
-];
 
 export const EditProfileScreen = () => {
   const navigation = useNavigation();
+  const { t } = useTranslation(); // <--- HOOK
   
-  // Hooks de Dados
+  // Opções traduzidas dinamicamente
+  const GENDER_OPTIONS = [
+    { label: t('gender_male'), value: 'MALE' },
+    { label: t('gender_female'), value: 'FEMALE' },
+    { label: t('gender_non_binary'), value: 'NON_BINARY' },
+    { label: t('gender_other'), value: 'OTHER' },
+  ];
+
   const { data: profile, isLoading: isLoadingData } = useGetMyProfile();
   const { mutateAsync: updateProfile, isPending: isSavingProfile } = useUpdateProfile(); 
   const { mutateAsync: updateAvatar, isPending: isSavingAvatar } = useUpdateAvatar(); 
 
-  // Estados do Formulário
   const [birthDate, setBirthDate] = useState(new Date());
   const [birthCity, setBirthCity] = useState('');
   const [birthTime, setBirthTime] = useState(new Date());
@@ -46,27 +41,22 @@ export const EditProfileScreen = () => {
   const [cpfCnpj, setCpfCnpj] = useState('');
   const [bio, setBio] = useState('');
   
-  // Estado da Foto
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [isAvatarChanged, setIsAvatarChanged] = useState(false);
 
-  // Estados de Controle de UI (Modais)
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
 
-  // Carregar dados iniciais
   useEffect(() => {
     if (profile) {
       if (profile.birthDate) setBirthDate(new Date(profile.birthDate));
-      
       if (profile.birthTime) {
           const [h, m] = profile.birthTime.split(':');
           const timeDate = new Date();
           timeDate.setHours(parseInt(h || '0'), parseInt(m || '0'));
           setBirthTime(timeDate);
       }
-      
       setBirthCity(profile.birthCity || '');
       setFullNameBirth(profile.fullNameBirth || '');
       setCurrentCity(profile.currentCity || '');
@@ -93,13 +83,11 @@ export const EditProfileScreen = () => {
 
   const handleSubmit = async () => {
     try {
-        // 1. Validação
         if (!birthCity || !currentCity || !gender || !cpfCnpj) {
-            Alert.alert("Campos Obrigatórios", "Por favor preencha cidade, gênero e CPF.");
+            Alert.alert(t('required_fields_title'), t('required_fields_msg'));
             return;
         }
 
-        // 2. Prepara o Objeto
         const payload: UpdateProfileDto = {
             birthDate: birthDate.toISOString(),
             birthTime: `${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`,
@@ -111,19 +99,16 @@ export const EditProfileScreen = () => {
             cpfCnpj
         };
 
-        // 3. Envia Texto
         await updateProfile(payload);
 
-        // 4. Envia Foto (se mudou)
         if (isAvatarChanged && avatarUri) {
             await updateAvatar(avatarUri);
         }
-
-        // Sucesso
         navigation.goBack();
         
     } catch (error) {
         console.error("Erro ao salvar perfil:", error);
+        Alert.alert(t('error'), t('unknown_error'));
     }
   };
 
@@ -134,62 +119,29 @@ export const EditProfileScreen = () => {
   }
 
   const isSaving = isSavingProfile || isSavingAvatar;
-  const genderLabel = GENDER_OPTIONS.find(g => g.value === gender)?.label || 'Selecione...';
+  const genderLabel = GENDER_OPTIONS.find(g => g.value === gender)?.label || t('gender_select');
 
-  // Renderizador do Calendário (Compatível com iOS/Android)
-  const renderDateTimePicker = (
-    show: boolean, 
-    setShow: (v: boolean) => void, 
-    value: Date, 
-    mode: 'date' | 'time',
-    onChange: (date: Date) => void
-  ) => {
+  const renderDateTimePicker = (show: boolean, setShow: (v: boolean) => void, value: Date, mode: 'date' | 'time', onChange: (date: Date) => void) => {
     if (!show) return null;
-
-    // iOS: Modal Branco Centralizado
     if (Platform.OS === 'ios') {
         return (
             <Modal visible={show} transparent animationType="fade">
-                <TouchableOpacity 
-                    style={styles.modalOverlay} 
-                    activeOpacity={1} 
-                    onPress={() => setShow(false)}
-                >
+                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShow(false)}>
                     <View style={styles.iosPickerModalContent}>
                          <View style={styles.iosPickerHeader}>
-                            <Text style={styles.iosPickerTitle}>{mode === 'date' ? 'Data de Nascimento' : 'Hora de Nascimento'}</Text>
+                            <Text style={styles.iosPickerTitle}>{mode === 'date' ? t('birth_date_label') : t('birth_time_label')}</Text>
                             <TouchableOpacity onPress={() => setShow(false)} style={styles.iosConfirmBtn}>
-                                <Text style={styles.iosConfirmText}>Pronto</Text>
+                                <Text style={styles.iosConfirmText}>{t('ready')}</Text>
                             </TouchableOpacity>
                          </View>
-                         <DateTimePicker 
-                            value={value} 
-                            mode={mode} 
-                            display="spinner"
-                            themeVariant="light" // Texto preto em fundo branco
-                            textColor="black"
-                            onChange={(e, date) => {
-                                if (date) onChange(date);
-                            }}
-                            style={{ height: 200, width: '100%', backgroundColor: 'white' }}
-                         />
+                         <DateTimePicker value={value} mode={mode} display="spinner" themeVariant="light" textColor="black" onChange={(e, date) => { if (date) onChange(date); }} style={{ height: 200, width: '100%', backgroundColor: 'white' }} />
                     </View>
                 </TouchableOpacity>
             </Modal>
         );
     }
-
-    // Android: Modal Nativo
     return (
-        <DateTimePicker 
-            value={value} 
-            mode={mode} 
-            display="default"
-            onChange={(e, date) => {
-                setShow(false);
-                if (date) onChange(date);
-            }}
-        />
+        <DateTimePicker value={value} mode={mode} display="default" onChange={(e, date) => { setShow(false); if (date) onChange(date); }} />
     );
   };
 
@@ -197,22 +149,16 @@ export const EditProfileScreen = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         
-        {/* Header */}
         <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                 <ArrowLeft size={24} color="#FFF" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Editar Perfil</Text>
+            <Text style={styles.headerTitle}>{t('edit_profile_title')}</Text>
             <View style={{width: 24}} />
         </View>
 
-        <ScrollView 
-            contentContainerStyle={styles.scroll}
-            // --- IMPORTANTE: Permite o clique na lista de cidades ---
-            keyboardShouldPersistTaps='always'
-        >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps='always'>
             
-            {/* Avatar */}
             <View style={styles.avatarSection}>
                 <View style={styles.avatarWrapper}>
                     <Image source={{ uri: avatarUri || 'https://via.placeholder.com/150' }} style={styles.avatar} />
@@ -222,137 +168,82 @@ export const EditProfileScreen = () => {
                 </View>
                 <TouchableOpacity onPress={handlePickImage} disabled={isSaving}>
                     <Text style={styles.changePhotoText}>
-                        {isSavingAvatar ? 'Enviando...' : 'Mudar Foto'}
+                        {isSavingAvatar ? t('uploading_photo') : t('change_photo')}
                     </Text>
                 </TouchableOpacity>
             </View>
 
             <View style={styles.form}>
                 
-                {/* Linha 1: Data e Hora */}
                 <View style={[styles.row, { zIndex: 1 }]}>
                     <View style={styles.col}>
-                        <Text style={styles.label}>Data Nasc. *</Text>
+                        <Text style={styles.label}>{t('birth_date_label')}</Text>
                         <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.inputBtn}>
                             <Text style={styles.inputText}>{birthDate.toLocaleDateString('pt-BR')}</Text>
                         </TouchableOpacity>
                     </View>
                     <View style={styles.col}>
-                        <Text style={styles.label}>Hora Nasc. *</Text>
+                        <Text style={styles.label}>{t('birth_time_label')}</Text>
                         <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.inputBtn}>
-                            <Text style={styles.inputText}>
-                                {`${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`}
-                            </Text>
+                            <Text style={styles.inputText}>{`${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Cidade Nascimento (Com Autocomplete) */}
-                {/* Z-Index alto para a lista flutuar sobre o resto */}
                 <View style={[styles.inputGroup, { zIndex: 20 }]}>
-                    <Text style={styles.label}>Cidade de Nascimento *</Text>
-                    <CityAutocomplete 
-                        placeholder="Ex: São Paulo, SP"
-                        value={birthCity}
-                        onSelect={(city) => setBirthCity(city)}
-                    />
+                    <Text style={styles.label}>{t('birth_city_label')}</Text>
+                    <CityAutocomplete placeholder="Ex: São Paulo, SP" value={birthCity} onSelect={(city) => setBirthCity(city)} />
                 </View>
 
-                {/* Nome Nascimento */}
                 <View style={[styles.inputGroup, { zIndex: 10 }]}>
                     <View style={styles.labelRow}>
-                        <Text style={styles.label}>Nome Completo (Certidão) *</Text>
-                        <TouchableOpacity onPress={() => showInfo('Nome de Nascimento', 'Usado apenas para cálculos de numerologia. Não será exibido publicamente.')}>
+                        <Text style={styles.label}>{t('full_name_birth_label')}</Text>
+                        <TouchableOpacity onPress={() => showInfo(t('full_name_birth_info_title'), t('full_name_birth_info_msg'))}>
                             <Info size={16} color="#9CA3AF" style={{marginLeft: 6}} />
                         </TouchableOpacity>
                     </View>
-                    <TextInput 
-                        style={styles.input} 
-                        value={fullNameBirth} 
-                        onChangeText={setFullNameBirth}
-                        placeholder="Nome exato do nascimento"
-                        placeholderTextColor="#6B7280"
-                    />
+                    <TextInput style={styles.input} value={fullNameBirth} onChangeText={setFullNameBirth} placeholder={t('name_placeholder')} placeholderTextColor="#6B7280" />
                 </View>
 
-                {/* Linha 2: Cidade Atual e Gênero */}
-                {/* Z-Index ajustado para a lista desta cidade flutuar sobre o Gênero/CPF */}
                 <View style={[styles.row, { zIndex: 15 }]}>
                      <View style={[styles.col, {flex: 1.5, zIndex: 20}]}>
-                        <Text style={styles.label}>Cidade Atual *</Text>
-                        <CityAutocomplete 
-                            placeholder="Sua cidade"
-                            value={currentCity}
-                            onSelect={(city) => setCurrentCity(city)}
-                        />
+                        <Text style={styles.label}>{t('current_city_label')}</Text>
+                        <CityAutocomplete placeholder="Sua cidade" value={currentCity} onSelect={(city) => setCurrentCity(city)} />
                     </View>
 
                     <View style={[styles.col, {flex: 1}]}>
-                        <Text style={styles.label}>Gênero *</Text>
-                        <TouchableOpacity 
-                            style={styles.inputBtn} 
-                            onPress={() => setShowGenderPicker(true)}
-                        >
+                        <Text style={styles.label}>{t('gender_label')}</Text>
+                        <TouchableOpacity style={styles.inputBtn} onPress={() => setShowGenderPicker(true)}>
                             <Text style={styles.inputText} numberOfLines={1}>{genderLabel}</Text>
                             <ChevronDown size={16} color="#9CA3AF" style={{marginLeft: 4}} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* CPF */}
                 <View style={[styles.inputGroup, styles.borderTop, { zIndex: 1 }]}>
                      <View style={styles.labelRow}>
                         <Lock size={16} color="#FACC15" style={{marginRight: 6}} />
-                        <Text style={styles.label}>CPF / CNPJ (Pagamentos) *</Text>
-                        <TouchableOpacity onPress={() => showInfo('Privacidade', 'Necessário para gerar PIX via Asaas. Totalmente privado.')}>
+                        <Text style={styles.label}>{t('cpf_label')}</Text>
+                        <TouchableOpacity onPress={() => showInfo(t('cpf_info_title'), t('cpf_info_msg'))}>
                             <Info size={16} color="#9CA3AF" style={{marginLeft: 6}} />
                         </TouchableOpacity>
                     </View>
-                    <TextInput 
-                        style={styles.input} 
-                        value={cpfCnpj} 
-                        onChangeText={setCpfCnpj} 
-                        placeholder="Apenas números"
-                        keyboardType="numeric"
-                        placeholderTextColor="#6B7280"
-                    />
+                    <TextInput style={styles.input} value={cpfCnpj} onChangeText={setCpfCnpj} placeholder="Apenas números" keyboardType="numeric" placeholderTextColor="#6B7280" />
                 </View>
 
-                {/* Bio */}
                 <View style={[styles.inputGroup, { zIndex: 1 }]}>
-                    <Text style={styles.label}>Bio (Sobre mim)</Text>
-                    <TextInput 
-                        style={[styles.input, styles.textArea]} 
-                        value={bio} 
-                        onChangeText={setBio} 
-                        placeholder="Conte um pouco sobre você..."
-                        placeholderTextColor="#6B7280"
-                        multiline
-                        numberOfLines={3}
-                    />
+                    <Text style={styles.label}>{t('bio_label')}</Text>
+                    <TextInput style={[styles.input, styles.textArea]} value={bio} onChangeText={setBio} placeholder={t('bio_placeholder')} placeholderTextColor="#6B7280" multiline numberOfLines={3} />
                 </View>
 
             </View>
 
-            {/* Botão Salvar */}
-            <TouchableOpacity 
-                style={[styles.saveButton, isSaving && styles.disabledBtn, { zIndex: 0 }]} 
-                onPress={handleSubmit}
-                disabled={isSaving}
-            >
-                {isSaving ? (
-                    <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}>
-                        <ActivityIndicator color="#FFF" />
-                        <Text style={styles.saveText}>Salvando...</Text>
-                    </View>
-                ) : (
-                    <Text style={styles.saveText}>Salvar Perfil</Text>
-                )}
+            <TouchableOpacity style={[styles.saveButton, isSaving && styles.disabledBtn, { zIndex: 0 }]} onPress={handleSubmit} disabled={isSaving}>
+                {isSaving ? ( <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}><ActivityIndicator color="#FFF" /><Text style={styles.saveText}>{t('saving')}</Text></View> ) : ( <Text style={styles.saveText}>{t('save_profile_button')}</Text> )}
             </TouchableOpacity>
 
         </ScrollView>
 
-        {/* Componentes Modais (Renderizados fora do fluxo principal) */}
         {renderDateTimePicker(showDatePicker, setShowDatePicker, birthDate, 'date', setBirthDate)}
         {renderDateTimePicker(showTimePicker, setShowTimePicker, birthTime, 'time', setBirthTime)}
 
@@ -360,7 +251,7 @@ export const EditProfileScreen = () => {
             <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowGenderPicker(false)}>
                 <View style={styles.modalContent}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Selecione seu Gênero</Text>
+                        <Text style={styles.modalTitle}>{t('select_gender_title')}</Text>
                         <TouchableOpacity onPress={() => setShowGenderPicker(false)}><X size={24} color="#9CA3AF" /></TouchableOpacity>
                     </View>
                     {GENDER_OPTIONS.map((opt) => (
@@ -381,37 +272,29 @@ export const EditProfileScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827' },
-  
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#374151', zIndex: 50 },
   backBtn: { padding: 4 },
   headerTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-  
   scroll: { padding: 20, paddingBottom: 50 },
-  
   avatarSection: { alignItems: 'center', marginBottom: 24, zIndex: 1 },
   avatarWrapper: { position: 'relative', marginBottom: 8 },
   avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#6366F1', backgroundColor: '#374151' },
   cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#6366F1', padding: 8, borderRadius: 20, borderWidth: 2, borderColor: '#1F2937', shadowColor: "#000", shadowOffset: {width:0, height:2}, shadowOpacity:0.3, shadowRadius:2 },
   changePhotoText: { color: '#6366F1', fontSize: 14, fontWeight: '600' },
-  
   form: { gap: 16 },
   row: { flexDirection: 'row', gap: 12 },
   col: { flex: 1 },
   inputGroup: { gap: 6 },
   borderTop: { borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 16, marginTop: 8 },
-  
   label: { color: '#D1D5DB', fontSize: 14, fontWeight: '500' },
   labelRow: { flexDirection: 'row', alignItems: 'center' },
-  
   input: { backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151', borderRadius: 8, padding: 12, color: '#FFF', fontSize: 16, minHeight: 50 },
   inputBtn: { backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151', borderRadius: 8, paddingHorizontal: 12, height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   inputText: { color: '#FFF', fontSize: 16 },
   textArea: { height: 100, textAlignVertical: 'top', paddingTop: 12 },
-  
   saveButton: { backgroundColor: '#16A34A', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 30, shadowColor: "#16A34A", shadowOffset: {width:0, height:4}, shadowOpacity:0.2, shadowRadius:4 },
   saveText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   disabledBtn: { opacity: 0.7 },
-  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: '#1F2937', width: '100%', maxWidth: 340, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#374151' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
@@ -419,7 +302,6 @@ const styles = StyleSheet.create({
   modalOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#374151' },
   modalOptionText: { color: '#D1D5DB', fontSize: 16 },
   activeOptionText: { color: '#6366F1', fontWeight: 'bold' },
-  
   iosPickerModalContent: { width: '100%', backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', paddingBottom: 20 },
   iosPickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#F3F4F6', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   iosPickerTitle: { color: '#111827', fontSize: 16, fontWeight: 'bold' },

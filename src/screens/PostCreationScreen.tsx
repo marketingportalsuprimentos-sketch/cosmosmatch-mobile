@@ -9,18 +9,16 @@ import * as ImagePicker from 'expo-image-picker';
 import { useCreatePost } from '../features/feed/hooks/useFeed';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
-import { useTranslation } from 'react-i18next'; // <--- Import i18n
+import { useTranslation } from 'react-i18next'; // <--- I18N
 
 LogBox.ignoreLogs(['Video component from `expo-av` is deprecated', 'MediaTypeOptions']);
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Limite de tempo (23 segundos)
 const MAX_VIDEO_DURATION = 23; 
 
 export default function PostCreationScreen() {
-  const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  const { t } = useTranslation(); // <--- HOOK
   const { mutate: createPost, isPending } = useCreatePost();
 
   const [mediaUri, setMediaUri] = useState<string | null>(null);
@@ -33,12 +31,8 @@ export default function PostCreationScreen() {
     
     if (asset.type === 'video') {
       const durationSec = (asset.duration || 0) / 1000; 
-      
       if (durationSec > (MAX_VIDEO_DURATION + 3)) { 
-         Alert.alert(
-             t('video_too_long_title'), // "Vídeo muito longo"
-             t('video_too_long_msg', { duration: MAX_VIDEO_DURATION }) // "O limite é de 23 segundos..."
-         );
+         Alert.alert(t('video_too_long_title'), t('video_too_long_msg', {duration: MAX_VIDEO_DURATION}));
          return;
       }
       setVideoDuration(durationSec);
@@ -74,18 +68,13 @@ export default function PostCreationScreen() {
         }
 
         console.log(`Abrindo câmera no modo: ${mode}`);
-        
-        const mediaTypes = mode === 'video' 
-            ? ImagePicker.MediaTypeOptions.Videos 
-            : ImagePicker.MediaTypeOptions.Images;
+        const mediaTypes = mode === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images;
 
         let result;
-
         if (mode === 'video') {
             result = await ImagePicker.launchCameraAsync({
                 mediaTypes: mediaTypes,
                 allowsEditing: false,
-                // Qualidade média = Arquivos menores que passam no servidor
                 videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
                 quality: 0.6,
                 videoMaxDuration: MAX_VIDEO_DURATION, 
@@ -99,66 +88,45 @@ export default function PostCreationScreen() {
             });
         }
 
-        if (!result.canceled) {
-            processMedia(result.assets[0]);
-        }
+        if (!result.canceled) processMedia(result.assets[0]);
 
     } catch (error) {
         console.error("Erro Câmera:", error);
-        const errorMsg = (error as any)?.message || t('unknown_error');
-        Alert.alert(t('error'), `${t('error_capture')}: ${errorMsg}`);
+        Alert.alert(t('error'), t('error_capture'));
     }
   };
 
-  // --- CORREÇÃO PRINCIPAL NO UPLOAD ---
   const handlePost = () => {
     if (!mediaUri) return;
 
     const formData = new FormData();
-
-    // 1. Força o nome e tipo corretos (Evita erro 400 no Android)
     let filename = mediaUri.split('/').pop() || 'upload';
     let type = '';
 
     if (mediaType === 'video') {
-        // Se não tiver extensão ou for estranha, força .mp4
-        if (!filename.toLowerCase().endsWith('.mp4')) {
-            filename = `${filename}.mp4`;
-        }
+        if (!filename.toLowerCase().endsWith('.mp4')) filename = `${filename}.mp4`;
         type = 'video/mp4';
     } else {
-        if (!filename.toLowerCase().endsWith('.jpg') && !filename.toLowerCase().endsWith('.png')) {
-            filename = `${filename}.jpg`;
-        }
+        if (!filename.toLowerCase().endsWith('.jpg') && !filename.toLowerCase().endsWith('.png')) filename = `${filename}.jpg`;
         type = 'image/jpeg';
     }
-
-    console.log('Enviando:', { uri: mediaUri, name: filename, type });
 
     // @ts-ignore
     formData.append('file', { uri: mediaUri, name: filename, type });
     formData.append('mediaType', mediaType === 'video' ? 'VIDEO' : 'PHOTO');
-    
     if (caption) formData.append('content', caption);
     if (videoDuration) formData.append('videoDuration', Math.round(videoDuration).toString());
 
     createPost(formData, {
       onSuccess: () => {
         Alert.alert(t('success'), t('post_published'));
-        setMediaUri(null);
-        setCaption('');
-        setMediaType(null);
+        setMediaUri(null); setCaption(''); setMediaType(null);
         navigation.navigate('FeedTab');
       },
       onError: (error: any) => {
-        console.log('Erro detalhado upload:', error.response?.data || error.message);
-        
-        // Se for erro 400, pode ser validação de campo
         if (error.response?.status === 400) {
              const msg = error.response?.data?.message;
-             // Verifica se é erro de DTO (array de erros) ou mensagem simples
-             const alerta = Array.isArray(msg) ? msg[0] : msg || t('invalid_data');
-             Alert.alert(t('upload_error'), `${t('server_refused')}: ${alerta}`);
+             Alert.alert(t('upload_error'), `${t('server_refused')}: ${Array.isArray(msg) ? msg[0] : msg}`);
         } else {
              Alert.alert(t('error'), t('publish_failed'));
         }
@@ -167,50 +135,37 @@ export default function PostCreationScreen() {
   };
 
   const handleCancel = () => {
-    setMediaUri(null);
-    setCaption('');
-    setMediaType(null);
-    navigation.goBack();
+    setMediaUri(null); setCaption(''); setMediaType(null); navigation.goBack();
   };
 
-  // --- RENDER ---
   if (!mediaUri) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.header}>
-           <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Ionicons name="close" size={30} color="white" />
-           </TouchableOpacity>
+           <TouchableOpacity onPress={() => navigation.goBack()}><Ionicons name="close" size={30} color="white" /></TouchableOpacity>
            <Text style={styles.headerTitle}>{t('new_post')}</Text>
            <View style={{width: 30}} />
         </View>
 
         <View style={styles.actionsContainer}>
-           <Text style={styles.instructionText}>{t('what_to_post')} ✨</Text>
-           
+           <Text style={styles.instructionText}>{t('what_to_post')}</Text>
            <TouchableOpacity style={styles.bigButton} onPress={() => openCamera('photo')}>
               <LinearGradient colors={['#EC4899', '#DB2777']} style={styles.gradientButton}>
-                 <Ionicons name="camera" size={32} color="white" />
-                 <Text style={styles.bigButtonText}>{t('take_photo')}</Text>
+                 <Ionicons name="camera" size={32} color="white" /><Text style={styles.bigButtonText}>{t('take_photo')}</Text>
               </LinearGradient>
            </TouchableOpacity>
-
            <TouchableOpacity style={styles.bigButton} onPress={() => openCamera('video')}>
               <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.gradientButton}>
-                 <Ionicons name="videocam" size={32} color="white" />
-                 <Text style={styles.bigButtonText}>{t('record_video')}</Text>
+                 <Ionicons name="videocam" size={32} color="white" /><Text style={styles.bigButtonText}>{t('record_video')}</Text>
               </LinearGradient>
            </TouchableOpacity>
-
            <TouchableOpacity style={styles.bigButton} onPress={openGallery}>
               <LinearGradient colors={['#374151', '#1F2937']} style={styles.gradientButton}>
-                 <Ionicons name="images" size={32} color="white" />
-                 <Text style={styles.bigButtonText}>{t('open_gallery')}</Text>
+                 <Ionicons name="images" size={32} color="white" /><Text style={styles.bigButtonText}>{t('open_gallery')}</Text>
               </LinearGradient>
            </TouchableOpacity>
-           
-           <Text style={styles.hintText}>{t('video_limit_hint', { duration: MAX_VIDEO_DURATION })}</Text>
+           <Text style={styles.hintText}>{t('video_limit_hint', {duration: MAX_VIDEO_DURATION})}</Text>
         </View>
       </View>
     );
@@ -221,37 +176,19 @@ export default function PostCreationScreen() {
         <StatusBar hidden />
         <View style={styles.mediaLayer}>
             {mediaType === 'video' ? (
-                <Video
-                    source={{ uri: mediaUri }}
-                    style={styles.fullScreenMedia}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay={true}
-                    isLooping={true}
-                    isMuted={false}
-                />
+                <Video source={{ uri: mediaUri }} style={styles.fullScreenMedia} resizeMode={ResizeMode.COVER} shouldPlay={true} isLooping={true} isMuted={false} />
             ) : (
                 <Image source={{ uri: mediaUri }} style={styles.fullScreenMedia} resizeMode="cover" />
             )}
         </View>
-
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.interfaceLayer}>
             <LinearGradient colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.8)']} style={styles.gradientOverlay}>
                <View style={styles.topBar}>
-                   <TouchableOpacity style={styles.closeButton} onPress={handleCancel}>
-                      <Ionicons name="close-circle" size={40} color="white" />
-                   </TouchableOpacity>
+                   <TouchableOpacity style={styles.closeButton} onPress={handleCancel}><Ionicons name="close-circle" size={40} color="white" /></TouchableOpacity>
                </View>
                <View style={styles.bottomArea}>
                   <Text style={styles.label}>{t('caption')}</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('write_something')}
-                    placeholderTextColor="#ccc"
-                    multiline
-                    maxLength={200}
-                    value={caption}
-                    onChangeText={setCaption}
-                  />
+                  <TextInput style={styles.input} placeholder={t('write_something')} placeholderTextColor="#ccc" multiline maxLength={200} value={caption} onChangeText={setCaption} />
                   <TouchableOpacity style={[styles.postButton, isPending && styles.disabledButton]} onPress={handlePost} disabled={isPending}>
                      {isPending ? <ActivityIndicator color="white" /> : <Text style={styles.postButtonText}>{t('publish')} ✨</Text>}
                   </TouchableOpacity>
