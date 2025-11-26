@@ -1,4 +1,3 @@
-// ... (Imports anteriores mantidos)
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, 
@@ -8,10 +7,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { ArrowLeft, Send, Lock, Star } from 'lucide-react-native';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query'; 
 import * as NavigationBar from 'expo-navigation-bar';
-import { useTranslation } from 'react-i18next'; // <--- I18N
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useGetConversationById } from '../features/chat/hooks/useChatQueries';
@@ -22,7 +20,7 @@ export const ChatConversationScreen = () => {
   const route = useRoute<any>();
   const queryClient = useQueryClient(); 
   const insets = useSafeAreaInsets();
-  const { t } = useTranslation(); // <--- HOOK
+  const { t } = useTranslation();
   
   const { chatId, targetName, targetPhoto } = route.params;
   const { user, socket } = useAuth(); 
@@ -52,7 +50,6 @@ export const ChatConversationScreen = () => {
     }, [])
   );
 
-  // ... (Socket useEffect mantido igual) ...
   useEffect(() => {
     if (!socket) return;
     const handleNewMessage = (message: any) => {
@@ -62,6 +59,7 @@ export const ChatConversationScreen = () => {
           if (oldData.messages.some((m: any) => m.id === message.id)) return oldData;
           return { ...oldData, messages: [...oldData.messages, message] };
         });
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
       }
     };
     socket.on('newMessage', handleNewMessage);
@@ -78,25 +76,16 @@ export const ChatConversationScreen = () => {
 
   const handleMessageLongPress = (msg: any) => {
     const isMe = msg.senderId === user?.id;
-
     if (isMe) {
-      Alert.alert(
-        t('chat_options_title'),
-        t('chat_delete_everyone_confirm'),
-        [
-          { text: t('cancel'), style: 'cancel' },
-          { text: t('chat_delete_everyone'), style: 'destructive', onPress: () => deleteMessage(msg.id) }
-        ]
-      );
+      Alert.alert(t('chat_options_title'), t('chat_delete_everyone_confirm'), [
+        { text: t('cancel'), style: 'cancel' },
+        { text: t('chat_delete_everyone'), style: 'destructive', onPress: () => deleteMessage(msg.id) }
+      ]);
     } else {
-      Alert.alert(
-        t('chat_options_title'),
-        t('chat_hide_me_confirm'),
-        [
-          { text: t('cancel'), style: 'cancel' },
-          { text: t('chat_hide_me'), style: 'destructive', onPress: () => hideMessage({ messageId: msg.id, conversationId: chatId }) }
-        ]
-      );
+      Alert.alert(t('chat_options_title'), t('chat_hide_me_confirm'), [
+        { text: t('cancel'), style: 'cancel' },
+        { text: t('chat_hide_me'), style: 'destructive', onPress: () => hideMessage({ messageId: msg.id, conversationId: chatId }) }
+      ]);
     }
   };
 
@@ -106,10 +95,7 @@ export const ChatConversationScreen = () => {
 
     if (shouldBlur) {
         return (
-            <TouchableOpacity 
-                style={[styles.bubble, styles.bubbleLeft, styles.blurredBubble]}
-                onPress={() => navigation.navigate('Premium')}
-            >
+            <TouchableOpacity style={[styles.bubble, styles.bubbleLeft, styles.blurredBubble]} onPress={() => navigation.navigate('Premium')} activeOpacity={0.8}>
                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
                     <Lock size={16} color="#A78BFA" />
                     <Text style={styles.blurredTitle}>{t('message_hidden_premium')}</Text>
@@ -120,12 +106,7 @@ export const ChatConversationScreen = () => {
     }
 
     return (
-      <TouchableOpacity 
-        onLongPress={() => handleMessageLongPress(item)}
-        delayLongPress={500}
-        activeOpacity={0.8}
-        style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}
-      >
+      <TouchableOpacity onLongPress={() => handleMessageLongPress(item)} activeOpacity={0.9} style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
         <Text style={styles.messageText}>{item.content}</Text>
         <Text style={styles.timeText}>{format(new Date(item.createdAt), 'HH:mm')}</Text>
       </TouchableOpacity>
@@ -144,23 +125,30 @@ export const ChatConversationScreen = () => {
             </View>
         </View>
 
-        <View style={styles.chatArea}>
-            {isLoading && !conversation ? (
-                <ActivityIndicator size="large" color="#8B5CF6" style={{marginTop: 20}} />
-            ) : (
-                <FlatList
-                    ref={flatListRef}
-                    data={conversation?.messages || []}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderMessage}
-                    contentContainerStyle={styles.listContent}
-                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                />
-            )}
-        </View>
+        {/* ESTRUTURA CORRIGIDA: KAV Envolve Lista + Input */}
+        <KeyboardAvoidingView 
+            style={{ flex: 1 }}
+            // Android: 'height' para encolher a lista. iOS: 'padding'.
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+            <View style={styles.chatArea}>
+                {isLoading && !conversation ? (
+                    <ActivityIndicator size="large" color="#8B5CF6" style={{marginTop: 20}} />
+                ) : (
+                    <FlatList
+                        ref={flatListRef}
+                        data={conversation?.messages || []}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderMessage}
+                        contentContainerStyle={styles.listContent}
+                        showsVerticalScrollIndicator={false}
+                        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    />
+                )}
+            </View>
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
-            <View style={{ paddingBottom: Math.max(insets.bottom, 20), backgroundColor: '#111827' }}>
+            <View style={{ paddingBottom: Math.max(insets.bottom, 10), backgroundColor: '#111827' }}>
                 {isPaywallActive ? (
                     <TouchableOpacity style={styles.premiumFooter} onPress={() => navigation.navigate('Premium')} activeOpacity={0.9}>
                         <Star size={20} color="#FFF" fill="#FFF" />
@@ -207,6 +195,6 @@ const styles = StyleSheet.create({
   inputContainer: { flexDirection: 'row', padding: 12, backgroundColor: '#111827', borderTopWidth: 1, borderTopColor: '#1F2937', alignItems: 'flex-end' },
   input: { flex: 1, backgroundColor: '#374151', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, color: '#FFF', fontSize: 15, marginRight: 10 },
   sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' },
-  premiumFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7C3AED', paddingVertical: 16, margin: 12, borderRadius: 30, gap: 8, shadowColor: "#7C3AED", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4.65, elevation: 8 },
+  premiumFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7C3AED', paddingVertical: 16, margin: 12, borderRadius: 30, gap: 8, elevation: 8 },
   premiumFooterText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 }
 });

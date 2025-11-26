@@ -8,8 +8,6 @@ import { Video, ResizeMode, Audio } from 'expo-av';
 import { FeedPost, MediaType } from '../services/feedApi';
 import { useAuth } from '../../../contexts/AuthContext'; 
 import { useGetFollowing } from '../../profile/hooks/useProfile'; 
-
-// I18N
 import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -31,17 +29,23 @@ interface FeedUserDeckProps {
   onNavigateToProfile: (userId: string) => void;
   onFollowAuthor: (userId: string) => void;
   onDeletePost?: (postId: string) => void; 
+  // --- NOVO: Aceita altura customizada ---
+  customHeight?: number;
 }
 
 export function FeedUserDeck({ 
   authorId, authorName, authorAvatar, posts, isDeckActive, paused,
   onDeckFinished, onLikePost, onOpenComments, onSharePost,
-  onNavigateToProfile, onFollowAuthor, onDeletePost
+  onNavigateToProfile, onFollowAuthor, onDeletePost,
+  customHeight // Recebe a altura calculada
 }: FeedUserDeckProps) {
   
   const { user } = useAuth(); 
-  const { t } = useTranslation(); // <--- HOOK
+  const { t } = useTranslation();
   const isOwner = user?.id === authorId; 
+
+  // Usa a altura customizada se vier, senão usa o padrão
+  const effectiveHeight = customHeight || POST_HEIGHT;
 
   const { data: followingList } = useGetFollowing(user?.id);
   const isFollowing = followingList?.some(u => u.id === authorId) ?? false;
@@ -112,7 +116,8 @@ export function FeedUserDeck({
     const isActive = isDeckActive && index === currentIndex && !paused;
 
     return (
-      <View style={styles.postContainer}>
+      // Aplica a altura dinâmica aqui
+      <View style={[styles.postContainer, { height: effectiveHeight }]}>
         {item.mediaType === MediaType.VIDEO ? (
             <Video
                 source={{ uri: item.imageUrl }}
@@ -161,7 +166,6 @@ export function FeedUserDeck({
             <TouchableOpacity style={styles.actionButton} onPress={() => onSharePost(item.id)}>
                <Ionicons name="share-outline" size={32} color="white" />
                <Text style={styles.actionLabel}>{t('send')}</Text> 
-               {/* Usei 'send' ou crie uma chave 'share' se preferir "Partilhar" */}
             </TouchableOpacity>
         </View>
 
@@ -173,7 +177,8 @@ export function FeedUserDeck({
   };
 
   return (
-    <View style={{ height: POST_HEIGHT, width: SCREEN_WIDTH, backgroundColor: 'black' }}>
+    // Aplica a altura dinâmica no container principal
+    <View style={{ height: effectiveHeight, width: SCREEN_WIDTH, backgroundColor: 'black' }}>
       <View style={styles.progressContainer}>
          {posts.map((_, index) => {
            let width: any = '0%';
@@ -206,6 +211,7 @@ export function FeedUserDeck({
 }
 
 const styles = StyleSheet.create({
+  // Height aqui é fallback, será sobrescrito pelo style inline
   postContainer: { width: SCREEN_WIDTH, height: POST_HEIGHT, justifyContent: 'center', backgroundColor: 'black' },
   fullImage: { width: '100%', height: '100%' },
   bottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '40%' },

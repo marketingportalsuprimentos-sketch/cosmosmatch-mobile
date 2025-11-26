@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal'; 
-import { useTranslation } from 'react-i18next'; // <--- I18N
+import { useTranslation } from 'react-i18next';
 import { useGetPostComments, useCommentOnPost } from '../hooks/useFeed';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -16,8 +16,7 @@ interface FeedCommentSheetProps {
 }
 
 export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedCommentSheetProps) {
-  const { user } = useAuth();
-  const { t } = useTranslation(); // <--- HOOK
+  const { t } = useTranslation();
   const [commentText, setCommentText] = useState('');
   
   const { data: comments, isLoading } = useGetPostComments(postId);
@@ -29,8 +28,17 @@ export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedC
     postComment(
       { postId, content: commentText, authorId }, 
       {
-        onSuccess: () => { setCommentText(''); Keyboard.dismiss(); },
-        onError: (error: any) => { if (error?.response?.status === 402) { Keyboard.dismiss(); onClose(); } }
+        onSuccess: () => { 
+          setCommentText(''); 
+          Keyboard.dismiss();
+          onClose(); 
+        },
+        onError: (error: any) => { 
+            if (error?.response?.status === 402) { 
+                Keyboard.dismiss(); 
+                onClose(); 
+            } 
+        }
       }
     );
   };
@@ -41,7 +49,7 @@ export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedC
          <Image source={{ uri: item.user.profile.imageUrl }} style={styles.avatar} />
        ) : ( <View style={[styles.avatar, styles.placeholderAvatar]} /> )}
        <View style={styles.commentBubble}>
-          <Text style={styles.commentAuthor}>{item.user?.name || 'Usuário'}</Text>
+          <Text style={styles.commentAuthor}>{item.user?.name || t('user_default')}</Text>
           <Text style={styles.commentText}>{item.content}</Text>
        </View>
     </View>
@@ -49,12 +57,23 @@ export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedC
 
   return (
     <Modal 
-      isVisible={isVisible} onBackdropPress={onClose} onSwipeComplete={onClose} 
-      swipeDirection={['down']} style={styles.modal} propagateSwipe={true} avoidKeyboard={false} 
+      isVisible={isVisible} 
+      onBackdropPress={onClose} 
+      onSwipeComplete={onClose} 
+      swipeDirection={['down']} 
+      style={styles.modal} 
+      propagateSwipe={true}
+      // --- NOVO AJUSTE ---
+      // Android: True (O Modal sobe sozinho)
+      // iOS: False (O KeyboardAvoidingView cuida disso)
+      avoidKeyboard={Platform.OS === 'android'} 
     >
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={styles.container} keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+        // Android: Undefined (Desligado, pois o Modal já subiu)
+        // iOS: Padding (Padrão)
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        style={styles.container} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
         <View style={styles.header}>
            <View style={styles.handle} />
@@ -77,13 +96,16 @@ export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedC
         <View style={styles.footer}>
            <TextInput
              style={styles.input}
-             placeholder={t('comments_placeholder')}
+             placeholder={t('send_message_placeholder')}
              placeholderTextColor="#6B7280"
-             value={commentText} onChangeText={setCommentText} multiline
+             value={commentText} 
+             onChangeText={setCommentText} 
+             multiline
            />
            <TouchableOpacity 
              style={[styles.sendBtn, !commentText.trim() && styles.disabledBtn]} 
-             onPress={handleSend} disabled={!commentText.trim() || isPending}
+             onPress={handleSend} 
+             disabled={!commentText.trim() || isPending}
            >
               {isPending ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="paper-plane" size={20} color="white" />}
            </TouchableOpacity>
@@ -108,7 +130,13 @@ const styles = StyleSheet.create({
   commentBubble: { flex: 1 },
   commentAuthor: { color: '#9CA3AF', fontSize: 12, marginBottom: 2 },
   commentText: { color: '#E5E7EB', fontSize: 14 },
-  footer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 30 : 15, borderTopWidth: 1, borderTopColor: '#374151', backgroundColor: '#111827' },
+  footer: { 
+      flexDirection: 'row', alignItems: 'center', 
+      paddingHorizontal: 15, 
+      paddingTop: 10, 
+      paddingBottom: Platform.OS === 'ios' ? 30 : 15, 
+      borderTopWidth: 1, borderTopColor: '#374151', backgroundColor: '#111827' 
+  },
   input: { flex: 1, backgroundColor: '#1F2937', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, color: 'white', maxHeight: 100, borderWidth: 1, borderColor: '#374151' },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
   disabledBtn: { backgroundColor: '#4B5563' }
