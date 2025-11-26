@@ -1,11 +1,10 @@
-// src/features/profile/components/BehavioralRadarChart.tsx
-
 import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import Svg, { Polygon, Line, Circle } from 'react-native-svg';
 import { Feather } from '@expo/vector-icons';
-import { captureRef } from 'react-native-view-shot'; // 📸 Câmera
-import * as Sharing from 'expo-sharing'; // 📤 Envio
+import { captureRef } from 'react-native-view-shot'; 
+import * as Sharing from 'expo-sharing'; 
+import { useTranslation } from 'react-i18next'; // <--- 1. IMPORTAR I18N
 
 interface BehavioralRadarChartProps {
   answers: number[] | null;
@@ -15,12 +14,10 @@ interface BehavioralRadarChartProps {
 }
 
 export const BehavioralRadarChart = ({ answers, sign, isOwner }: BehavioralRadarChartProps) => {
-  
-  // Referência para capturar a imagem
+  const { t } = useTranslation(); // <--- 2. ATIVAR HOOK
   const viewShotRef = useRef<View>(null);
   const [isSharing, setIsSharing] = useState(false);
 
-  // Configurações do Gráfico
   const size = 260;
   const center = size / 2;
   const radius = 90; 
@@ -37,7 +34,6 @@ export const BehavioralRadarChart = ({ answers, sign, isOwner }: BehavioralRadar
 
   if (!chartData) return null;
 
-  // Função para converter valor em coordenadas
   const getPoint = (value: number, index: number, maxVal = 10) => {
     const angle = (Math.PI * 2 * index) / 3 - Math.PI / 2;
     const r = (value / maxVal) * radius;
@@ -50,30 +46,26 @@ export const BehavioralRadarChart = ({ answers, sign, isOwner }: BehavioralRadar
   const bgPoints = [10, 10, 10].map((val, i) => getPoint(val, i)).join(' ');
   const midPoints = [5, 5, 5].map((val, i) => getPoint(val, i)).join(' ');
 
-  // --- LÓGICA DE COMPARTILHAMENTO ---
   const handleShare = async () => {
     if (isSharing) return;
     setIsSharing(true);
 
     try {
-      // 1. Verifica se pode compartilhar
       if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert("Indisponível", "O compartilhamento não está disponível neste dispositivo.");
+        Alert.alert(t('error'), "Indisponível");
         setIsSharing(false);
         return;
       }
 
-      // 2. Tira o print do Card
       const uri = await captureRef(viewShotRef, {
         format: 'png',
-        quality: 1, // Qualidade máxima
+        quality: 1, 
         result: 'tmpfile',
       });
 
-      // 3. Abre menu nativo
       await Sharing.shareAsync(uri, {
         mimeType: 'image/png',
-        dialogTitle: `Minha Vibração ${sign}`,
+        dialogTitle: `CosmosMatch ${sign}`,
         UTI: 'public.png',
       });
 
@@ -87,35 +79,40 @@ export const BehavioralRadarChart = ({ answers, sign, isOwner }: BehavioralRadar
   return (
     <View style={styles.container}>
       
-      {/* --- ÁREA CAPTURÁVEL (O CARD) --- */}
       <View 
         ref={viewShotRef} 
-        collapsable={false} // Importante para Android
+        collapsable={false} 
         style={styles.card}
       >
         <View style={styles.gradientBar} />
-        <Text style={styles.title}>Vibração {sign}</Text>
-        <Text style={styles.subtitle}>SINTONIA CÓSMICA</Text>
+        
+        {/* 3. TRADUÇÃO APLICADA */}
+        <Text style={styles.title}>{t('affinity')} {sign}</Text>
+        <Text style={styles.subtitle}>{t('quiz_title')}</Text>
 
         <View style={styles.chartContainer}>
           
-          <Text style={[styles.label, { top: 10, alignSelf: 'center' }]}>PERSONALIDADE</Text>
-          <Text style={[styles.label, { bottom: 50, right: 0 }]}>GOSTOS</Text>
-          <Text style={[styles.label, { bottom: 50, left: 0 }]}>ESTILO</Text>
+          {/* Usamos split para pegar a primeira palavra da categoria e UPPERCASE */}
+          <Text style={[styles.label, { top: 10, alignSelf: 'center' }]}>
+            {t('quiz_cat_personality').split(' ')[0].toUpperCase()}
+          </Text>
+          <Text style={[styles.label, { bottom: 50, right: 0 }]}>
+            {t('quiz_cat_preferences').split(' ')[0].toUpperCase()}
+          </Text>
+          <Text style={[styles.label, { bottom: 50, left: 0 }]}>
+            {t('quiz_cat_lifestyle').split(' ')[0].toUpperCase()}
+          </Text>
 
           <Svg height={size} width={size}>
-            {/* Triângulos de Fundo */}
             <Polygon points={bgPoints} stroke="#374151" strokeWidth="1" fill="none" />
             <Polygon points={midPoints} stroke="#374151" strokeWidth="1" strokeDasharray="4, 4" fill="none" />
 
-            {/* Eixos */}
             {[0, 1, 2].map(i => {
                const p = getPoint(10, i);
                const [x, y] = p.split(',');
                return <Line key={i} x1={center} y1={center} x2={x} y2={y} stroke="#374151" strokeWidth="1" />;
             })}
 
-            {/* Gráfico Preenchido */}
             <Polygon
               points={dataPoints}
               fill="rgba(139, 92, 246, 0.5)" 
@@ -123,7 +120,6 @@ export const BehavioralRadarChart = ({ answers, sign, isOwner }: BehavioralRadar
               strokeWidth="3"
             />
 
-            {/* Bolinhas nos Vértices */}
             {chartData.map((val, i) => {
                const p = getPoint(val, i);
                const [x, y] = p.split(',');
@@ -136,10 +132,9 @@ export const BehavioralRadarChart = ({ answers, sign, isOwner }: BehavioralRadar
           <View style={styles.badge}>
             <Text style={styles.badgeText}>CM</Text>
           </View>
-          <Text style={styles.footerText}>Gerado por CosmosMatch App</Text>
+          <Text style={styles.footerText}>{t('app_name')} App</Text>
         </View>
       </View>
-      {/* --- FIM DA ÁREA CAPTURÁVEL --- */}
 
       {isOwner && (
         <TouchableOpacity 
@@ -152,8 +147,9 @@ export const BehavioralRadarChart = ({ answers, sign, isOwner }: BehavioralRadar
           ) : (
               <Feather name="share-2" size={20} color="#FFF" />
           )}
+          {/* Usamos uma chave genérica de 'Ver Post' que serve aqui, ou o padrão */}
           <Text style={styles.shareButtonText}>
-              {isSharing ? "Gerando..." : "Compartilhar Card"}
+              {isSharing ? t('loading') : t('share_message_default')}
           </Text>
         </TouchableOpacity>
       )}

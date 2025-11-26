@@ -287,12 +287,18 @@ export default function DiscoveryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <CustomToast message={toastMessage} visible={toastVisible} icon={toastIcon} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{flex: 1}} enabled={activeInput === 'message'} keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
+      
+      {/* AJUSTE AQUI: Usando 'height' no Android para forçar o empurrão */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{flex: 1}} 
+        enabled={activeInput === 'message'} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 30} // Um pouco de offset no Android também
+      >
         
         <View style={[
             styles.searchWrapper, 
-            // Ajuste para a Barra de Busca: Apenas safe area no iOS, +15 no Android
-            { paddingTop: Platform.OS === 'android' ? insets.top + 15 : insets.top }
+            { paddingTop: Platform.OS === 'android' ? insets.top + 15 : Math.max(insets.top - 5, 10) }
         ]}>
             <View style={styles.headerContainer}>
               <View style={styles.inputWrapper}>
@@ -371,20 +377,7 @@ const styles = StyleSheet.create({
   connectButton: { backgroundColor: '#6366F1', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 14, borderRadius: 14, width: '100%', shadowColor: "#6366F1", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 5 },
   likedButton: { backgroundColor: '#374151', borderWidth: 1, borderColor: '#A855F7', shadowColor: "transparent" },
   connectButtonText: { color: 'white', fontSize: 17, fontWeight: 'bold' },
-  
-  // --- CORREÇÃO DO RODAPÉ ---
-  // Aumentei o paddingBottom para 20 para subir a barra de input e afastar do botão +
-  footerContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 20, 
-    paddingBottom: 20, // <-- Aumentado de 10 para 20
-    height: 90, // <-- Aumentado de 80 para 90 para compensar o padding
-    zIndex: 100, 
-    elevation: 100, 
-    backgroundColor: '#111827' 
-  },
+  footerContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 20, height: 90, zIndex: 100, elevation: 100, backgroundColor: '#111827' },
   circleButton: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(31, 41, 55, 0.5)', borderWidth: 1, borderColor: '#374151' },
   messageInputPill: { flex: 1, marginHorizontal: 12, height: 50, borderRadius: 25, backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, justifyContent: 'space-between' },
   inputMessage: { flex: 1, color: 'white', marginLeft: 10, height: '100%' },

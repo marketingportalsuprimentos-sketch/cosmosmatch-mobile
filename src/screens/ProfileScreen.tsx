@@ -6,7 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Settings, MapPin, Pencil, Sparkles, UserPlus, MessageCircle, Ban, ArrowLeft, Check, MoreVertical, LogOut, ShieldAlert, Lock, Calculator, X, Send, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useTranslation } from 'react-i18next'; // <--- I18N
+import { useTranslation } from 'react-i18next';
 
 import { toast } from '../lib/toast'; 
 import { useAuth } from '../contexts/AuthContext'; 
@@ -264,8 +264,13 @@ const CosmicDetailsCard = ({ profile, isOwner, onUnlockPress, isLocked }: any) =
                 </View>
             )}
             {isOwner && (
-                <TouchableOpacity style={[styles.btnPurpleFull, {marginTop: 15}, isLocked && styles.btnLocked]} onPress={isLocked ? onUnlockPress : () => navigation.navigate('NatalChartScreen')}>
-                     {isLocked && <Lock size={18} color="#FFF" style={{marginRight: 6}} />}<Text style={styles.btnText}>{t('view_my_astral_plan')}</Text>
+                <TouchableOpacity 
+                    style={[styles.btnPurpleFull, {marginTop: 15}, isLocked && styles.btnLocked]} 
+                    onPress={isLocked ? onUnlockPress : () => navigation.navigate('NatalChartScreen')}
+                    activeOpacity={0.8}
+                >
+                     {isLocked && <Lock size={18} color="#FFF" style={{marginRight: 6}} />}
+                     <Text style={styles.btnText}>{t('view_my_astral_plan')}</Text>
                 </TouchableOpacity>
             )}
         </View>
@@ -279,6 +284,7 @@ export default function ProfileScreen() {
   const { user: loggedInUser, isLoading: authLoading, signOut } = useAuth();
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  
   const [isLockModalOpen, setLockModalOpen] = useState(false);
   const [isMessageModalOpen, setMessageModalOpen] = useState(false);
 
@@ -289,6 +295,10 @@ export default function ProfileScreen() {
   const { data: photosData } = useGetGalleryPhotos(targetUserId);
   const { mutate: addPhoto, isPending: isUploading } = useAddPhotoToGallery();
   const { mutate: sendMessage, isPending: isSendingMessage } = useCreateOrGetConversation();
+  
+  // --- CORREÇÃO DE DADOS REAIS PARA O CADEADO ---
+  const { data: followers } = useGetFollowers(targetUserId);
+  const { data: following } = useGetFollowing(targetUserId);
 
   const handleEdit = () => navigation.navigate('EditProfileScreen' as never);
   const handleLogout = () => { if (signOut) { signOut(); } else { Alert.alert(t('error'), t('error_logout')); } };
@@ -329,27 +339,49 @@ export default function ProfileScreen() {
   if (!profileData) return <View style={styles.center}><Text style={{color: '#EF4444'}}>{t('profile_not_found')}</Text></View>;
 
   const sunSign = profileData.natalChart?.planets?.find((p: any) => p.name === 'Sol')?.sign || 'Cosmos';
+  
+  // LÓGICA DE BLOQUEIO COM DADOS REAIS
   const MIN_FOLLOWERS = 5;
   const MIN_FOLLOWING = 10;
-  const followersCount = profileData.user?._count?.followers ?? 0;
-  const followingCount = profileData.user?._count?.following ?? 0;
+  
+  // Usa o tamanho dos arrays de dados, ou 0 se ainda estiver carregando
+  const followersCount = followers?.length || 0;
+  const followingCount = following?.length || 0;
+  
   const isLocked = isOwner && (followersCount < MIN_FOLLOWERS || followingCount < MIN_FOLLOWING);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {!isOwner && <View style={{height: 10}} />}
       <ScrollView contentContainerStyle={styles.scroll}>
+        
         <IdentityCard profile={profileData} isOwner={isOwner} onEdit={handleEdit} onOpenQuiz={() => setIsQuizOpen(true)} myId={loggedInUser?.id} onLogout={handleLogout} onMessagePress={() => setMessageModalOpen(true)} />
         {profileData.behavioralAnswers && profileData.behavioralAnswers.length > 0 && ( <BehavioralRadarChart answers={profileData.behavioralAnswers} sign={sunSign} userId={profileData.userId} isOwner={isOwner} /> )}
         {profileData.bio && <AboutCard bio={profileData.bio} />}
-        <CosmicDetailsCard profile={profileData} isOwner={isOwner} isLocked={isLocked} onUnlockPress={() => setLockModalOpen(true)} />
+        
+        <CosmicDetailsCard 
+            profile={profileData} 
+            isOwner={isOwner} 
+            isLocked={isLocked} 
+            onUnlockPress={() => setLockModalOpen(true)} 
+        />
+        
         <ProfileGalleryGrid photos={photosData || []} isOwner={isOwner} onAddPhoto={handleAddPhoto} onPhotoClick={(p) => setSelectedPhotoId(p.id)} profileUserId={targetUserId} />
         <ConnectionsCard userId={targetUserId} />
       </ScrollView>
+
       {isUploading && <View style={styles.uploadOverlay}><View style={styles.uploadBox}><ActivityIndicator size="large" color="#FFF" /><Text style={styles.uploadText}>{t('uploading_photo')}</Text></View></View>}
+
       <BehavioralQuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} sunSign={sunSign} existingAnswers={profileData.behavioralAnswers} />
       <GalleryPhotoViewerModal photo={activePhoto} onClose={() => setSelectedPhotoId(null)} isOwner={isOwner} profileUserId={targetUserId} />
-      <NatalChartLockModal visible={isLockModalOpen} onClose={() => setLockModalOpen(false)} counts={{ followers: followersCount, following: followingCount }} metas={{ followers: MIN_FOLLOWERS, following: MIN_FOLLOWING }} />
+      
+      <NatalChartLockModal 
+        visible={isLockModalOpen} 
+        onClose={() => setLockModalOpen(false)} 
+        counts={{ followers: followersCount, following: followingCount }} 
+        metas={{ followers: MIN_FOLLOWERS, following: MIN_FOLLOWING }} 
+      />
+      
       <SendMessageModal visible={isMessageModalOpen} onClose={() => setMessageModalOpen(false)} recipient={profileData} onSend={handleSendMessage} isLoading={isSendingMessage} />
     </SafeAreaView>
   );
