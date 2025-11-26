@@ -8,7 +8,8 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ArrowLeft, Info, Lock, Camera, ChevronDown, Check, X } from 'lucide-react-native';
-import { useTranslation } from 'react-i18next'; // <--- I18N
+// 1. IMPORT I18N
+import { useTranslation } from 'react-i18next';
 
 import { useGetMyProfile, useUpdateProfile, useUpdateAvatar } from '../features/profile/hooks/useProfile';
 import { UpdateProfileDto } from '../types/profile.types';
@@ -18,9 +19,10 @@ LogBox.ignoreLogs(['VirtualizedLists should never be nested']);
 
 export const EditProfileScreen = () => {
   const navigation = useNavigation();
-  const { t } = useTranslation(); // <--- HOOK
+  // 2. HOOK
+  const { t } = useTranslation();
   
-  // Opções traduzidas dinamicamente
+  // 3. Opções de Gênero Traduzidas
   const GENDER_OPTIONS = [
     { label: t('gender_male'), value: 'MALE' },
     { label: t('gender_female'), value: 'FEMALE' },
@@ -51,12 +53,14 @@ export const EditProfileScreen = () => {
   useEffect(() => {
     if (profile) {
       if (profile.birthDate) setBirthDate(new Date(profile.birthDate));
+      
       if (profile.birthTime) {
           const [h, m] = profile.birthTime.split(':');
           const timeDate = new Date();
           timeDate.setHours(parseInt(h || '0'), parseInt(m || '0'));
           setBirthTime(timeDate);
       }
+      
       setBirthCity(profile.birthCity || '');
       setFullNameBirth(profile.fullNameBirth || '');
       setCurrentCity(profile.currentCity || '');
@@ -104,6 +108,7 @@ export const EditProfileScreen = () => {
         if (isAvatarChanged && avatarUri) {
             await updateAvatar(avatarUri);
         }
+
         navigation.goBack();
         
     } catch (error) {
@@ -121,27 +126,59 @@ export const EditProfileScreen = () => {
   const isSaving = isSavingProfile || isSavingAvatar;
   const genderLabel = GENDER_OPTIONS.find(g => g.value === gender)?.label || t('gender_select');
 
-  const renderDateTimePicker = (show: boolean, setShow: (v: boolean) => void, value: Date, mode: 'date' | 'time', onChange: (date: Date) => void) => {
+  const renderDateTimePicker = (
+    show: boolean, 
+    setShow: (v: boolean) => void, 
+    value: Date, 
+    mode: 'date' | 'time',
+    onChange: (date: Date) => void
+  ) => {
     if (!show) return null;
+
     if (Platform.OS === 'ios') {
         return (
             <Modal visible={show} transparent animationType="fade">
-                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShow(false)}>
+                <TouchableOpacity 
+                    style={styles.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setShow(false)}
+                >
                     <View style={styles.iosPickerModalContent}>
                          <View style={styles.iosPickerHeader}>
-                            <Text style={styles.iosPickerTitle}>{mode === 'date' ? t('birth_date_label') : t('birth_time_label')}</Text>
+                            <Text style={styles.iosPickerTitle}>
+                                {mode === 'date' ? t('birth_date_label').replace('*', '') : t('birth_time_label').replace('*', '')}
+                            </Text>
                             <TouchableOpacity onPress={() => setShow(false)} style={styles.iosConfirmBtn}>
                                 <Text style={styles.iosConfirmText}>{t('ready')}</Text>
                             </TouchableOpacity>
                          </View>
-                         <DateTimePicker value={value} mode={mode} display="spinner" themeVariant="light" textColor="black" onChange={(e, date) => { if (date) onChange(date); }} style={{ height: 200, width: '100%', backgroundColor: 'white' }} />
+                         <DateTimePicker 
+                            value={value} 
+                            mode={mode} 
+                            display="spinner"
+                            themeVariant="light" 
+                            textColor="black"
+                            onChange={(e, date) => {
+                                if (date) onChange(date);
+                            }}
+                            style={{ height: 200, width: '100%', backgroundColor: 'white' }}
+                         />
                     </View>
                 </TouchableOpacity>
             </Modal>
         );
     }
+
     return (
-        <DateTimePicker value={value} mode={mode} display="default" onChange={(e, date) => { setShow(false); if (date) onChange(date); }} />
+        <DateTimePicker 
+            value={value} 
+            mode={mode} 
+            display="default"
+            onChange={(e, date) => {
+                setShow(false);
+                if (date) onChange(date);
+            }}
+        />
     );
   };
 
@@ -157,7 +194,10 @@ export const EditProfileScreen = () => {
             <View style={{width: 24}} />
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps='always'>
+        <ScrollView 
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps='always'
+        >
             
             <View style={styles.avatarSection}>
                 <View style={styles.avatarWrapper}>
@@ -185,14 +225,20 @@ export const EditProfileScreen = () => {
                     <View style={styles.col}>
                         <Text style={styles.label}>{t('birth_time_label')}</Text>
                         <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.inputBtn}>
-                            <Text style={styles.inputText}>{`${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`}</Text>
+                            <Text style={styles.inputText}>
+                                {`${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
 
                 <View style={[styles.inputGroup, { zIndex: 20 }]}>
                     <Text style={styles.label}>{t('birth_city_label')}</Text>
-                    <CityAutocomplete placeholder="Ex: São Paulo, SP" value={birthCity} onSelect={(city) => setBirthCity(city)} />
+                    <CityAutocomplete 
+                        placeholder={t('filter_city_placeholder')}
+                        value={birthCity}
+                        onSelect={(city) => setBirthCity(city)}
+                    />
                 </View>
 
                 <View style={[styles.inputGroup, { zIndex: 10 }]}>
@@ -202,18 +248,31 @@ export const EditProfileScreen = () => {
                             <Info size={16} color="#9CA3AF" style={{marginLeft: 6}} />
                         </TouchableOpacity>
                     </View>
-                    <TextInput style={styles.input} value={fullNameBirth} onChangeText={setFullNameBirth} placeholder={t('name_placeholder')} placeholderTextColor="#6B7280" />
+                    <TextInput 
+                        style={styles.input} 
+                        value={fullNameBirth} 
+                        onChangeText={setFullNameBirth}
+                        placeholder={t('name_placeholder')}
+                        placeholderTextColor="#6B7280"
+                    />
                 </View>
 
                 <View style={[styles.row, { zIndex: 15 }]}>
                      <View style={[styles.col, {flex: 1.5, zIndex: 20}]}>
                         <Text style={styles.label}>{t('current_city_label')}</Text>
-                        <CityAutocomplete placeholder="Sua cidade" value={currentCity} onSelect={(city) => setCurrentCity(city)} />
+                        <CityAutocomplete 
+                            placeholder={t('filter_city_placeholder')}
+                            value={currentCity}
+                            onSelect={(city) => setCurrentCity(city)}
+                        />
                     </View>
 
                     <View style={[styles.col, {flex: 1}]}>
                         <Text style={styles.label}>{t('gender_label')}</Text>
-                        <TouchableOpacity style={styles.inputBtn} onPress={() => setShowGenderPicker(true)}>
+                        <TouchableOpacity 
+                            style={styles.inputBtn} 
+                            onPress={() => setShowGenderPicker(true)}
+                        >
                             <Text style={styles.inputText} numberOfLines={1}>{genderLabel}</Text>
                             <ChevronDown size={16} color="#9CA3AF" style={{marginLeft: 4}} />
                         </TouchableOpacity>
@@ -228,18 +287,44 @@ export const EditProfileScreen = () => {
                             <Info size={16} color="#9CA3AF" style={{marginLeft: 6}} />
                         </TouchableOpacity>
                     </View>
-                    <TextInput style={styles.input} value={cpfCnpj} onChangeText={setCpfCnpj} placeholder="Apenas números" keyboardType="numeric" placeholderTextColor="#6B7280" />
+                    <TextInput 
+                        style={styles.input} 
+                        value={cpfCnpj} 
+                        onChangeText={setCpfCnpj} 
+                        placeholder="000.000.000-00"
+                        keyboardType="numeric"
+                        placeholderTextColor="#6B7280"
+                    />
                 </View>
 
                 <View style={[styles.inputGroup, { zIndex: 1 }]}>
                     <Text style={styles.label}>{t('bio_label')}</Text>
-                    <TextInput style={[styles.input, styles.textArea]} value={bio} onChangeText={setBio} placeholder={t('bio_placeholder')} placeholderTextColor="#6B7280" multiline numberOfLines={3} />
+                    <TextInput 
+                        style={[styles.input, styles.textArea]} 
+                        value={bio} 
+                        onChangeText={setBio} 
+                        placeholder={t('bio_placeholder')}
+                        placeholderTextColor="#6B7280"
+                        multiline
+                        numberOfLines={3}
+                    />
                 </View>
 
             </View>
 
-            <TouchableOpacity style={[styles.saveButton, isSaving && styles.disabledBtn, { zIndex: 0 }]} onPress={handleSubmit} disabled={isSaving}>
-                {isSaving ? ( <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}><ActivityIndicator color="#FFF" /><Text style={styles.saveText}>{t('saving')}</Text></View> ) : ( <Text style={styles.saveText}>{t('save_profile_button')}</Text> )}
+            <TouchableOpacity 
+                style={[styles.saveButton, isSaving && styles.disabledBtn, { zIndex: 0 }]} 
+                onPress={handleSubmit}
+                disabled={isSaving}
+            >
+                {isSaving ? (
+                    <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}>
+                        <ActivityIndicator color="#FFF" />
+                        <Text style={styles.saveText}>{t('saving')}</Text>
+                    </View>
+                ) : (
+                    <Text style={styles.saveText}>{t('save_profile_button')}</Text>
+                )}
             </TouchableOpacity>
 
         </ScrollView>

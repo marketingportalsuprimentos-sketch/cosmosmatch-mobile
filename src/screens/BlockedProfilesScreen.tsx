@@ -3,10 +3,13 @@ import { View, Text, FlatList, Image, TouchableOpacity, StyleSheet, ActivityIndi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next'; // <--- I18N
+
 import { useGetBlockedUsers, useUnblockUser } from '../features/profile/hooks/useProfile';
 
 export default function BlockedProfilesScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation(); // <--- HOOK
   const { data: blockedUsers, isLoading } = useGetBlockedUsers();
   const { mutate: unblock, isPending } = useUnblockUser();
 
@@ -24,21 +27,19 @@ export default function BlockedProfilesScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.title}>Perfis Bloqueados</Text>
+        <Text style={styles.title}>{t('blocked_profiles_title')}</Text>
       </View>
 
-      {/* Lista */}
       <FlatList
         data={blockedUsers || []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>Você não bloqueou ninguém.</Text>
+          <Text style={styles.emptyText}>{t('no_blocked_users')}</Text>
         }
         renderItem={({ item }) => (
           <View style={styles.card}>
@@ -55,7 +56,7 @@ export default function BlockedProfilesScreen() {
               onPress={() => handleUnblock(item.id)}
               disabled={isPending}
             >
-              <Text style={styles.unblockText}>Desbloquear</Text>
+              <Text style={styles.unblockText}>{t('unblock')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -72,8 +73,6 @@ const styles = StyleSheet.create({
   title: { color: 'white', fontSize: 20, fontWeight: 'bold' },
   list: { padding: 20 },
   emptyText: { color: '#9CA3AF', textAlign: 'center', marginTop: 50 },
-  
-  // Card
   card: { 
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#1F2937', padding: 12, borderRadius: 12, marginBottom: 12,
@@ -82,7 +81,6 @@ const styles = StyleSheet.create({
   userInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
   name: { color: 'white', fontSize: 16, fontWeight: '600' },
-  
   unblockBtn: { backgroundColor: '#4F46E5', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
   unblockText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
 });

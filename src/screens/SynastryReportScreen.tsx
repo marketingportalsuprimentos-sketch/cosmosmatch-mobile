@@ -1,11 +1,11 @@
-// src/screens/SynastryReportScreen.tsx
-
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next'; // <--- I18N
+
 import { getSynastryReport } from '../features/compatibility/services/compatibilityApi';
 import { SynastryChartDisplay } from '../features/compatibility/components/SynastryChartDisplay';
 import { Aspect } from '../types/compatibility.types';
@@ -25,6 +25,7 @@ const AspectItem = ({ aspect, nameA, nameB }: { aspect: Aspect, nameA: string, n
 export const SynastryReportScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const { t } = useTranslation(); // <--- HOOK
   const { targetUserId } = route.params as { targetUserId: string };
 
   const { data, isLoading, error } = useQuery({
@@ -33,7 +34,7 @@ export const SynastryReportScreen = () => {
   });
 
   if (isLoading) return <View style={styles.center}><ActivityIndicator size="large" color="#818CF8" /></View>;
-  if (error || !data) return <View style={styles.center}><Text style={styles.errorText}>Erro ao carregar sinastria.</Text></View>;
+  if (error || !data) return <View style={styles.center}><Text style={styles.errorText}>{t('error_loading_synastry')}</Text></View>;
 
   const { report, chartA, chartB, nameA, nameB } = data;
 
@@ -43,34 +44,31 @@ export const SynastryReportScreen = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <ArrowLeft size={24} color="#FFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Sinastria</Text>
+        <Text style={styles.headerTitle}>{t('synastry_title')}</Text>
         <View style={{width: 24}} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         
-        {/* Legenda */}
         <View style={styles.legendContainer}>
-            <Text style={styles.legendText}>Anel Externo: <Text style={{fontWeight:'bold'}}>{nameA}</Text></Text>
-            <Text style={styles.legendText}>Anel Interno: <Text style={{fontWeight:'bold'}}>{nameB}</Text></Text>
+            <Text style={styles.legendText}>{t('outer_ring')}: <Text style={{fontWeight:'bold'}}>{nameA}</Text></Text>
+            <Text style={styles.legendText}>{t('inner_ring')}: <Text style={{fontWeight:'bold'}}>{nameB}</Text></Text>
         </View>
 
-        {/* Mandala Dupla */}
         <SynastryChartDisplay chartA={chartA} chartB={chartB} report={report} />
 
-        {/* Listas de Aspectos */}
         <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: '#4ADE80' }]}>Pontos Fortes e Atração</Text>
+            <Text style={[styles.sectionTitle, { color: '#4ADE80' }]}>{t('strengths_attraction')}</Text>
             {report.positiveAspects.length > 0 ? (
-                report.positiveAspects.map((aspect, i) => <AspectItem key={i} aspect={aspect} nameA={nameA} nameB={nameB} />)
-            ) : <Text style={styles.emptyText}>Nenhum aspecto principal.</Text>}
+                report.positiveAspects.map((aspect: any, i: any) => <AspectItem key={i} aspect={aspect} nameA={nameA} nameB={nameB} />)
+            ) : <Text style={styles.emptyText}>{t('no_main_aspects')}</Text>}
         </View>
 
         <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: '#F87171' }]}>Pontos de Desafio</Text>
+            <Text style={[styles.sectionTitle, { color: '#F87171' }]}>{t('challenges_conflict')}</Text>
             {report.challengingAspects.length > 0 ? (
-                report.challengingAspects.map((aspect, i) => <AspectItem key={i} aspect={aspect} nameA={nameA} nameB={nameB} />)
-            ) : <Text style={styles.emptyText}>Nenhum desafio principal.</Text>}
+                report.challengingAspects.map((aspect: any, i: any) => <AspectItem key={i} aspect={aspect} nameA={nameA} nameB={nameB} />)
+            ) : <Text style={styles.emptyText}>{t('no_main_challenges')}</Text>}
         </View>
 
       </ScrollView>
