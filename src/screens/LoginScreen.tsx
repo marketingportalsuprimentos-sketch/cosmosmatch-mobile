@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, 
-  ActivityIndicator, KeyboardAvoidingView, Platform, Image, Dimensions
+  ActivityIndicator, KeyboardAvoidingView, Platform, Image, Dimensions, Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../contexts/AuthContext';
-import { toast } from '../lib/toast';
 import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
@@ -21,14 +20,21 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
 
   const handleLogin = async () => {
+    console.log("Tentando logar com:", email); // Debug 1
+
     if (!email || !password) {
-      toast.error('Preencha todos os campos');
+      Alert.alert('Atenção', 'Preencha email e senha');
       return;
     }
+
     try {
       await signIn(email, password);
-    } catch (error) {
-      // Erro já tratado no contexto
+      console.log("Login sucesso!"); // Debug 2
+    } catch (error: any) {
+      console.log("Erro no Login:", error); // Debug 3
+      // Mostra o erro na tela para sabermos o que é
+      const msg = error.response?.data?.message || error.message || 'Erro desconhecido';
+      Alert.alert('Erro no Login', String(msg));
     }
   };
 
@@ -51,7 +57,6 @@ export function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
-        {/* Cabeçalho Centralizado */}
         <View style={styles.header}>
           <Text style={styles.title}>{t('welcome_back')}</Text>
           <Text style={styles.subtitle}>{t('login_subtitle')}</Text>
@@ -114,32 +119,10 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
-  
-  content: { 
-    flex: 1, 
-    justifyContent: 'center', // Centraliza verticalmente
-    padding: 24 
-  },
-  
-  header: { 
-    marginBottom: 40, 
-    alignItems: 'center' // Centraliza os textos horizontalmente
-  },
-  
-  title: { 
-    fontSize: 32, 
-    fontWeight: 'bold', 
-    color: '#FFF', 
-    marginBottom: 8, 
-    textAlign: 'center' // Garante o texto no meio
-  },
-  
-  subtitle: { 
-    fontSize: 16, 
-    color: '#9CA3AF', 
-    textAlign: 'center' // Garante o texto no meio
-  },
-  
+  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  header: { marginBottom: 40, alignItems: 'center' },
+  title: { fontSize: 32, fontWeight: 'bold', color: '#FFF', marginBottom: 8, textAlign: 'center' },
+  subtitle: { fontSize: 16, color: '#9CA3AF', textAlign: 'center' },
   form: { gap: 16 },
   inputGroup: { gap: 8 },
   input: {
