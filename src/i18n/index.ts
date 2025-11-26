@@ -7,7 +7,7 @@ const resources = {
   // 🇧🇷 PORTUGUÊS
   pt: {
     translation: {
-      welcome_back: 'Bem-vindo de volta!',
+      welcome_back: 'CosmosMatch', // <--- MUDANÇA AQUI
       login_subtitle: 'Entre para conectar-se com as estrelas.',
       email_placeholder: 'Seu e-mail',
       password_placeholder: 'Sua senha',
@@ -20,7 +20,7 @@ const resources = {
   // 🇺🇸 INGLÊS
   en: {
     translation: {
-      welcome_back: 'Welcome back!',
+      welcome_back: 'CosmosMatch', // <--- MUDANÇA AQUI
       login_subtitle: 'Login to connect with the stars.',
       email_placeholder: 'Your email',
       password_placeholder: 'Your password',
@@ -33,7 +33,7 @@ const resources = {
   // 🇪🇸 ESPANHOL
   es: {
     translation: {
-      welcome_back: '¡Bienvenido de nuevo!',
+      welcome_back: 'CosmosMatch', // <--- MUDANÇA AQUI
       login_subtitle: 'Ingresa para conectar con las estrellas.',
       email_placeholder: 'Tu correo electrónico',
       password_placeholder: 'Tu contraseña',
@@ -43,10 +43,10 @@ const resources = {
       register_link: 'Regístrate',
     },
   },
-  // 🇫🇷 FRANCÊS (Novo!)
+  // 🇫🇷 FRANCÊS
   fr: {
     translation: {
-      welcome_back: 'Bon retour !',
+      welcome_back: 'CosmosMatch', // <--- MUDANÇA AQUI
       login_subtitle: 'Connectez-vous pour rejoindre les étoiles.',
       email_placeholder: 'Votre e-mail',
       password_placeholder: 'Votre mot de passe',
@@ -56,10 +56,10 @@ const resources = {
       register_link: "S'inscrire",
     },
   },
-  // 🇮🇹 ITALIANO (Novo!)
+  // 🇮🇹 ITALIANO
   it: {
     translation: {
-      welcome_back: 'Bentornato!',
+      welcome_back: 'CosmosMatch', // <--- MUDANÇA AQUI
       login_subtitle: 'Accedi per connetterti con le stelle.',
       email_placeholder: 'La tua email',
       password_placeholder: 'La tua password',
