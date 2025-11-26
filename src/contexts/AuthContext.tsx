@@ -16,12 +16,14 @@ import { storage } from '../lib/storage';
 import { ENV } from '../config/env';
 import { View, ActivityIndicator } from 'react-native';
 
+// 1. ATUALIZAÇÃO NA INTERFACE: Adicionado signIn
 export interface AuthContextType {
   user: AuthUser | null;
   setUser: Dispatch<SetStateAction<AuthUser | null>>;
   isLoading: boolean;
+  signIn: (email: string, password: string) => Promise<void>; // <--- NOVO
   logout: () => Promise<void>;
-  signOut: () => Promise<void>; // ADICIONADO: Alias para compatibilidade
+  signOut: () => Promise<void>; 
   incrementFreeContactsUsed: () => void;
   socket: Socket | null;
 }
@@ -114,6 +116,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user, socket]);
 
+  // --- 3. FUNÇÃO DE LOGIN (A PEÇA QUE FALTAVA) ---
+  const signIn = useCallback(async (email, password) => {
+    // Faz a requisição ao backend
+    const response = await api.post('/auth/login', { email, password });
+    const { accessToken, user } = response.data;
+
+    // Salva o token no celular
+    await storage.setToken(accessToken);
+    
+    // Atualiza o estado do usuário (Isso faz o App.tsx trocar a tela de Login pela Home)
+    setUserState(user);
+  }, []);
+
   const logout = useCallback(async () => {
     console.log('Auth: Logout...');
     await storage.removeToken();
@@ -152,8 +167,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     setUser,
     isLoading,
+    signIn, // <--- Agora a função está disponível para as telas usarem!
     logout,
-    signOut: logout, // AQUI ESTÁ A CORREÇÃO: signOut aponta para logout
+    signOut: logout, 
     incrementFreeContactsUsed,
     socket,
   };

@@ -7,8 +7,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode, Audio } from 'expo-av'; 
 import { FeedPost, MediaType } from '../services/feedApi';
 import { useAuth } from '../../../contexts/AuthContext'; 
-// --- NOVO IMPORT: Para verificar se já segue ---
 import { useGetFollowing } from '../../profile/hooks/useProfile'; 
+
+// I18N
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 80; 
@@ -32,29 +34,16 @@ interface FeedUserDeckProps {
 }
 
 export function FeedUserDeck({ 
-  authorId,
-  authorName, 
-  authorAvatar, 
-  posts, 
-  isDeckActive,
-  paused,
-  onDeckFinished,
-  onLikePost, 
-  onOpenComments,
-  onSharePost,
-  onNavigateToProfile,
-  onFollowAuthor,
-  onDeletePost
+  authorId, authorName, authorAvatar, posts, isDeckActive, paused,
+  onDeckFinished, onLikePost, onOpenComments, onSharePost,
+  onNavigateToProfile, onFollowAuthor, onDeletePost
 }: FeedUserDeckProps) {
   
   const { user } = useAuth(); 
+  const { t } = useTranslation(); // <--- HOOK
   const isOwner = user?.id === authorId; 
 
-  // --- CORREÇÃO DE PERSISTÊNCIA DO FOLLOW ---
-  // Busca a lista de quem eu sigo
   const { data: followingList } = useGetFollowing(user?.id);
-  
-  // Verifica se este autor está na lista
   const isFollowing = followingList?.some(u => u.id === authorId) ?? false;
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -117,11 +106,7 @@ export function FeedUserDeck({
   });
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
 
-  const handleFollowPress = () => { 
-      // Apenas chamamos a função. O React Query atualizará a lista 'followingList'
-      // automaticamente, fazendo o botão mudar de estado.
-      onFollowAuthor(authorId); 
-  };
+  const handleFollowPress = () => { onFollowAuthor(authorId); };
 
   const renderPostItem = ({ item, index }: { item: FeedPost, index: number }) => {
     const isActive = isDeckActive && index === currentIndex && !paused;
@@ -144,25 +129,14 @@ export function FeedUserDeck({
         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.9)']} style={styles.bottomGradient} />
 
         <View style={styles.rightActions}>
-            
-            {/* LÓGICA: SEGUIR vs APAGAR */}
             {isOwner ? (
-                <TouchableOpacity 
-                    style={styles.actionButton} 
-                    onPress={() => {
-                        if (onDeletePost) {
-                            onDeletePost(item.id);
-                        }
-                    }}
-                >
+                <TouchableOpacity style={styles.actionButton} onPress={() => { if (onDeletePost) onDeletePost(item.id); }}>
                     <View style={styles.iconCircle}>
                        <Ionicons name="trash-outline" size={24} color="#EF4444" />
                     </View>
-                    <Text style={[styles.actionLabel, {color: '#EF4444'}]}>Apagar</Text>
+                    <Text style={[styles.actionLabel, {color: '#EF4444'}]}>{t('delete')}</Text>
                 </TouchableOpacity>
             ) : (
-                // --- BOTÃO SEGUIR CORRIGIDO ---
-                // Agora ele usa a variável 'isFollowing' baseada no banco de dados, não state local
                 <TouchableOpacity style={styles.actionButton} onPress={handleFollowPress} disabled={isFollowing}>
                     <View style={[styles.followIconContainer, isFollowing && { borderColor: '#10B981', backgroundColor:'rgba(16, 185, 129, 0.3)' }]}>
                        {isFollowing ? 
@@ -170,7 +144,7 @@ export function FeedUserDeck({
                           <><Ionicons name="person" size={20} color="white" /><View style={styles.plusBadge}><Ionicons name="add" size={10} color="white" /></View></>
                        }
                     </View>
-                    <Text style={styles.actionLabel}>{isFollowing ? 'Seguindo' : 'Seguir'}</Text>
+                    <Text style={styles.actionLabel}>{isFollowing ? t('following_status') : t('follow')}</Text>
                 </TouchableOpacity>
             )}
 
@@ -186,7 +160,8 @@ export function FeedUserDeck({
 
             <TouchableOpacity style={styles.actionButton} onPress={() => onSharePost(item.id)}>
                <Ionicons name="share-outline" size={32} color="white" />
-               <Text style={styles.actionLabel}>Partilhar</Text>
+               <Text style={styles.actionLabel}>{t('send')}</Text> 
+               {/* Usei 'send' ou crie uma chave 'share' se preferir "Partilhar" */}
             </TouchableOpacity>
         </View>
 
@@ -248,7 +223,7 @@ const styles = StyleSheet.create({
   actionLabel: { color: 'white', fontSize: 12, fontWeight: '600', marginTop: 2, textShadowColor: 'black', textShadowRadius: 3 },
   
   followIconContainer: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, borderWidth: 1, borderColor: 'white' },
-  iconCircle: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', borderRadius: 20, borderWidth: 1, borderColor: '#EF4444' }, // Estilo da lixeira
+  iconCircle: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', borderRadius: 20, borderWidth: 1, borderColor: '#EF4444' }, 
   plusBadge: { position: 'absolute', bottom: -5, backgroundColor: '#EF4444', borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' },
 
   bottomInfo: { position: 'absolute', bottom: 20, left: 15, right: 80, zIndex: 20 },

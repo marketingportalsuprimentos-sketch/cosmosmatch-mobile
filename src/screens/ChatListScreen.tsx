@@ -2,12 +2,13 @@ import React, { useState, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, Image, FlatList, ActivityIndicator, Alert, Platform 
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; // Importei useSafeAreaInsets
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; 
 import { MessageCircle, Heart, Search, Trash2, Lock } from 'lucide-react-native';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { ptBR } from 'date-fns/locale'; // Obs: Datas relativas mantidas em PT ou EN global seria complexo, ok por hora.
 import { useFocusEffect } from '@react-navigation/native'; 
 import * as NavigationBar from 'expo-navigation-bar';
+import { useTranslation } from 'react-i18next'; // <--- I18N
 
 import { useAuth } from '../contexts/AuthContext';
 import { useGetConversations } from '../features/chat/hooks/useChatQueries';
@@ -17,9 +18,10 @@ import { useHideConversation } from '../features/chat/hooks/useChatMutations';
 type Tab = 'messages' | 'likes';
 
 export const ChatListScreen = ({ navigation }: any) => {
+  const { t } = useTranslation(); // <--- HOOK
   const [activeTab, setActiveTab] = useState<Tab>('messages');
   const { user } = useAuth();
-  const insets = useSafeAreaInsets(); // Hook para medir o topo (relógio)
+  const insets = useSafeAreaInsets(); 
   
   const { data: conversations, isLoading: loadingChat, refetch: refetchChats } = useGetConversations();
   const { data: likes, isLoading: loadingLikes, refetch: refetchLikes } = useGetLikesReceived();
@@ -28,7 +30,6 @@ export const ChatListScreen = ({ navigation }: any) => {
   const { mutate: markAsRead } = useMarkLikesAsRead();
   const { mutate: hideConversation } = useHideConversation();
 
-  // --- MODO IMERSIVO ---
   useFocusEffect(
     useCallback(() => {
       const enableImmersiveMode = async () => {
@@ -37,9 +38,7 @@ export const ChatListScreen = ({ navigation }: any) => {
             await NavigationBar.setVisibilityAsync('hidden');
             await NavigationBar.setBehaviorAsync('overlay-swipe');
             await NavigationBar.setBackgroundColorAsync('#00000000'); 
-          } catch (e) {
-            console.log('Erro barra android chat list', e);
-          }
+          } catch (e) {}
         }
       };
       enableImmersiveMode();
@@ -57,11 +56,11 @@ export const ChatListScreen = ({ navigation }: any) => {
 
   const handleDeleteChat = (id: string) => {
     Alert.alert(
-      'Esconder Conversa', 
-      'Tem a certeza de que quer esconder esta conversa? Ela reaparecerá se receber uma nova mensagem.',
+      t('hide_chat_title'), 
+      t('hide_chat_confirm'),
       [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Esconder', style: 'destructive', onPress: () => hideConversation(id) }
+        { text: t('cancel'), style: 'cancel' },
+        { text: t('hide'), style: 'destructive', onPress: () => hideConversation(id) }
       ]
     );
   };
@@ -97,10 +96,10 @@ export const ChatListScreen = ({ navigation }: any) => {
                 {showAsBlocked ? (
                     <View style={styles.blurRow}>
                         <Lock size={14} color="#A78BFA" />
-                        <Text style={styles.blurText}>Mensagem Oculta (Premium)</Text>
+                        <Text style={styles.blurText}>{t('message_hidden_premium')}</Text>
                     </View>
                 ) : (
-                    <Text style={styles.messagePreview} numberOfLines={1}>{lastMsg?.content || 'Inicie a conversa...'}</Text>
+                    <Text style={styles.messagePreview} numberOfLines={1}>{lastMsg?.content || t('start_conversation')}</Text>
                 )}
             </View>
         </TouchableOpacity>
@@ -116,7 +115,7 @@ export const ChatListScreen = ({ navigation }: any) => {
         <Image source={{ uri: item.profile?.imageUrl || 'https://via.placeholder.com/150' }} style={[styles.avatar, { borderColor: '#A78BFA', borderWidth: 2 }]} />
         <View style={styles.textContainer}>
             <Text style={styles.name}>{item.name}</Text>
-            <Text style={[styles.messagePreview, {color: '#A78BFA'}]}>Curtiu seu perfil!</Text>
+            <Text style={[styles.messagePreview, {color: '#A78BFA'}]}>{t('liked_your_profile')}</Text>
         </View>
         <Heart size={24} color="#A78BFA" fill="#A78BFA" />
     </TouchableOpacity>
@@ -124,13 +123,8 @@ export const ChatListScreen = ({ navigation }: any) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* HEADER COM PADDING DINÂMICO (Correção aqui) */}
-      <View style={[
-          styles.header, 
-          { paddingTop: Platform.OS === 'android' ? insets.top + 10 : 15 } 
-      ]}>
-        <Text style={styles.headerTitle}>Mensagens</Text>
-        {/* Botão de busca agora leva para a tela de pesquisa */}
+      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : 15 }]}>
+        <Text style={styles.headerTitle}>{t('messages_title')}</Text>
         <TouchableOpacity style={styles.searchButton} onPress={() => navigation.navigate('SearchUsers')}>
             <Search size={20} color="#D1D5DB" />
         </TouchableOpacity>
@@ -139,21 +133,27 @@ export const ChatListScreen = ({ navigation }: any) => {
       <View style={styles.tabsContainer}>
         <TouchableOpacity style={[styles.tab, activeTab === 'messages' && styles.activeTab]} onPress={() => handleTabChange('messages')}>
             <MessageCircle size={18} color={activeTab === 'messages' ? '#FFF' : '#6B7280'} />
-            <Text style={[styles.tabText, activeTab === 'messages' && styles.activeTabText]}>Mensagens</Text>
+            <Text style={[styles.tabText, activeTab === 'messages' && styles.activeTabText]}>{t('tab_messages')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tab, activeTab === 'likes' && styles.activeTab]} onPress={() => handleTabChange('likes')}>
             <Heart size={18} color={activeTab === 'likes' ? '#FFF' : '#6B7280'} />
-            <Text style={[styles.tabText, activeTab === 'likes' && styles.activeTabText]}>Likes</Text>
+            <Text style={[styles.tabText, activeTab === 'likes' && styles.activeTabText]}>{t('tab_likes')}</Text>
             {(unreadLikesData?.count || 0) > 0 && ( <View style={styles.counterBadge}><Text style={styles.counterText}>{unreadLikesData?.count}</Text></View> )}
         </TouchableOpacity>
       </View>
       <View style={styles.content}>
         {activeTab === 'messages' ? (
             loadingChat ? <ActivityIndicator color="#A78BFA" style={{marginTop: 50}} /> : 
-            <FlatList data={conversations || []} keyExtractor={item => item.id} renderItem={renderMessageItem} contentContainerStyle={styles.listContent} ListEmptyComponent={<View style={styles.emptyState}><MessageCircle size={48} color="#374151" /><Text style={styles.emptyTitle}>Sem conversas</Text><Text style={styles.emptyText}>Suas conexões aparecerão aqui.</Text></View>} />
+            <FlatList 
+              data={conversations || []} keyExtractor={item => item.id} renderItem={renderMessageItem} contentContainerStyle={styles.listContent} 
+              ListEmptyComponent={<View style={styles.emptyState}><MessageCircle size={48} color="#374151" /><Text style={styles.emptyTitle}>{t('no_conversations')}</Text><Text style={styles.emptyText}>{t('no_conversations_sub')}</Text></View>} 
+            />
         ) : (
             loadingLikes ? <ActivityIndicator color="#A78BFA" style={{marginTop: 50}} /> : 
-            <FlatList data={likes || []} keyExtractor={item => item.id} renderItem={renderLikeItem} contentContainerStyle={styles.listContent} ListEmptyComponent={<View style={styles.emptyState}><Heart size={48} color="#374151" /><Text style={styles.emptyTitle}>Sem likes ainda</Text><Text style={styles.emptyText}>Capriche no perfil para atrair conexões!</Text></View>} />
+            <FlatList 
+              data={likes || []} keyExtractor={item => item.id} renderItem={renderLikeItem} contentContainerStyle={styles.listContent} 
+              ListEmptyComponent={<View style={styles.emptyState}><Heart size={48} color="#374151" /><Text style={styles.emptyTitle}>{t('no_likes_yet')}</Text><Text style={styles.emptyText}>{t('no_likes_sub')}</Text></View>} 
+            />
         )}
       </View>
     </SafeAreaView>
@@ -162,7 +162,6 @@ export const ChatListScreen = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
-  // Header não tem padding fixo no topo mais, é dinâmico no componente
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 15 },
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#FFF' },
   searchButton: { padding: 10, backgroundColor: '#1F2937', borderRadius: 20 },

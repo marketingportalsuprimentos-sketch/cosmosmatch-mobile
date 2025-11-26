@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useCreatePost } from '../features/feed/hooks/useFeed';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
+import { useTranslation } from 'react-i18next'; // <--- Import i18n
 
 LogBox.ignoreLogs(['Video component from `expo-av` is deprecated', 'MediaTypeOptions']);
 
@@ -18,6 +19,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_VIDEO_DURATION = 23; 
 
 export default function PostCreationScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { mutate: createPost, isPending } = useCreatePost();
 
@@ -34,8 +36,8 @@ export default function PostCreationScreen() {
       
       if (durationSec > (MAX_VIDEO_DURATION + 3)) { 
          Alert.alert(
-             "Vídeo muito longo", 
-             `O limite é de ${MAX_VIDEO_DURATION} segundos. Escolha um vídeo mais curto.`
+             t('video_too_long_title'), // "Vídeo muito longo"
+             t('video_too_long_msg', { duration: MAX_VIDEO_DURATION }) // "O limite é de 23 segundos..."
          );
          return;
       }
@@ -58,7 +60,7 @@ export default function PostCreationScreen() {
         });
         if (!result.canceled) processMedia(result.assets[0]);
     } catch (error) {
-        Alert.alert("Erro", "Não foi possível abrir a galeria.");
+        Alert.alert(t('error'), t('error_gallery'));
     }
   };
 
@@ -67,7 +69,7 @@ export default function PostCreationScreen() {
         const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
         
         if (cameraPerm.status !== 'granted') {
-            Alert.alert("Permissão Negada", "Ative a permissão da câmera nas configurações.");
+            Alert.alert(t('permission_denied'), t('enable_camera_permission'));
             return;
         }
 
@@ -103,8 +105,8 @@ export default function PostCreationScreen() {
 
     } catch (error) {
         console.error("Erro Câmera:", error);
-        const errorMsg = (error as any)?.message || "Erro desconhecido";
-        Alert.alert("Erro", `Não foi possível capturar: ${errorMsg}`);
+        const errorMsg = (error as any)?.message || t('unknown_error');
+        Alert.alert(t('error'), `${t('error_capture')}: ${errorMsg}`);
     }
   };
 
@@ -142,7 +144,7 @@ export default function PostCreationScreen() {
 
     createPost(formData, {
       onSuccess: () => {
-        Alert.alert("Sucesso", "Post publicado! 🚀");
+        Alert.alert(t('success'), t('post_published'));
         setMediaUri(null);
         setCaption('');
         setMediaType(null);
@@ -155,10 +157,10 @@ export default function PostCreationScreen() {
         if (error.response?.status === 400) {
              const msg = error.response?.data?.message;
              // Verifica se é erro de DTO (array de erros) ou mensagem simples
-             const alerta = Array.isArray(msg) ? msg[0] : msg || "Dados inválidos.";
-             Alert.alert("Erro no envio", `O servidor recusou: ${alerta}`);
+             const alerta = Array.isArray(msg) ? msg[0] : msg || t('invalid_data');
+             Alert.alert(t('upload_error'), `${t('server_refused')}: ${alerta}`);
         } else {
-             Alert.alert("Erro", "Falha ao publicar. Verifique sua conexão.");
+             Alert.alert(t('error'), t('publish_failed'));
         }
       }
     });
@@ -180,35 +182,35 @@ export default function PostCreationScreen() {
            <TouchableOpacity onPress={() => navigation.goBack()}>
               <Ionicons name="close" size={30} color="white" />
            </TouchableOpacity>
-           <Text style={styles.headerTitle}>Novo Post</Text>
+           <Text style={styles.headerTitle}>{t('new_post')}</Text>
            <View style={{width: 30}} />
         </View>
 
         <View style={styles.actionsContainer}>
-           <Text style={styles.instructionText}>O que vamos postar hoje? ✨</Text>
+           <Text style={styles.instructionText}>{t('what_to_post')} ✨</Text>
            
            <TouchableOpacity style={styles.bigButton} onPress={() => openCamera('photo')}>
               <LinearGradient colors={['#EC4899', '#DB2777']} style={styles.gradientButton}>
                  <Ionicons name="camera" size={32} color="white" />
-                 <Text style={styles.bigButtonText}>Tirar Foto</Text>
+                 <Text style={styles.bigButtonText}>{t('take_photo')}</Text>
               </LinearGradient>
            </TouchableOpacity>
 
            <TouchableOpacity style={styles.bigButton} onPress={() => openCamera('video')}>
               <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.gradientButton}>
                  <Ionicons name="videocam" size={32} color="white" />
-                 <Text style={styles.bigButtonText}>Gravar Vídeo</Text>
+                 <Text style={styles.bigButtonText}>{t('record_video')}</Text>
               </LinearGradient>
            </TouchableOpacity>
 
            <TouchableOpacity style={styles.bigButton} onPress={openGallery}>
               <LinearGradient colors={['#374151', '#1F2937']} style={styles.gradientButton}>
                  <Ionicons name="images" size={32} color="white" />
-                 <Text style={styles.bigButtonText}>Abrir Galeria</Text>
+                 <Text style={styles.bigButtonText}>{t('open_gallery')}</Text>
               </LinearGradient>
            </TouchableOpacity>
            
-           <Text style={styles.hintText}>Vídeos até {MAX_VIDEO_DURATION} segundos</Text>
+           <Text style={styles.hintText}>{t('video_limit_hint', { duration: MAX_VIDEO_DURATION })}</Text>
         </View>
       </View>
     );
@@ -240,10 +242,10 @@ export default function PostCreationScreen() {
                    </TouchableOpacity>
                </View>
                <View style={styles.bottomArea}>
-                  <Text style={styles.label}>Legenda</Text>
+                  <Text style={styles.label}>{t('caption')}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Escreva algo..."
+                    placeholder={t('write_something')}
                     placeholderTextColor="#ccc"
                     multiline
                     maxLength={200}
@@ -251,7 +253,7 @@ export default function PostCreationScreen() {
                     onChangeText={setCaption}
                   />
                   <TouchableOpacity style={[styles.postButton, isPending && styles.disabledButton]} onPress={handlePost} disabled={isPending}>
-                     {isPending ? <ActivityIndicator color="white" /> : <Text style={styles.postButtonText}>Publicar ✨</Text>}
+                     {isPending ? <ActivityIndicator color="white" /> : <Text style={styles.postButtonText}>{t('publish')} ✨</Text>}
                   </TouchableOpacity>
                </View>
             </LinearGradient>

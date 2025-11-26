@@ -19,6 +19,9 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as NavigationBar from 'expo-navigation-bar';
 
+// 1. IMPORTAR I18N
+import { useTranslation } from 'react-i18next';
+
 import { useDiscoveryQueue } from '../features/discovery/hooks/useDiscoveryQueue';
 import { useDiscoveryMutations } from '../features/discovery/hooks/useDiscoveryMutations';
 import { useFollowUser } from '../features/profile/hooks/useProfile'; 
@@ -47,6 +50,7 @@ const CustomToast = ({ message, visible, icon }: { message: string, visible: boo
 function DiscoveryCard({ 
     profile, onSwipeRight, onSwipeLeft, onSearchTap, isKeyboardVisible, activeInput, onConnectPress, isConnected, onNamePress 
 }: any) {
+  const { t } = useTranslation(); // Hook
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
@@ -73,8 +77,8 @@ function DiscoveryCard({
   });
 
   const imageUrl = profile.profile?.imageUrl;
-  const name = profile.name || 'Sem Nome';
-  const city = profile.profile?.currentCity || 'Localização desconhecida';
+  const name = profile.name || t('no_name');
+  const city = profile.profile?.currentCity || t('unknown_location');
   const score = profile.compatibility?.score ?? 0;
   const shouldHideFooter = isKeyboardVisible && activeInput === 'message';
 
@@ -92,7 +96,7 @@ function DiscoveryCard({
         <View style={styles.topContainer}>
            <View style={styles.affinityBadge}>
               <Ionicons name="sparkles" size={14} color="#E9D5FF" />
-              <Text style={styles.affinityLabel}>Afinidade</Text>
+              <Text style={styles.affinityLabel}>{t('affinity')}</Text>
               <Text style={styles.affinityScore}>{Math.round(score)}%</Text>
            </View>
            <TouchableOpacity style={styles.searchIconBtn} onPress={onSearchTap} activeOpacity={0.7}>
@@ -115,7 +119,9 @@ function DiscoveryCard({
                 onPress={onConnectPress} activeOpacity={0.9} disabled={isConnected} 
              >
                 <Ionicons name={isConnected ? "checkmark-circle" : "person-add"} size={20} color="white" style={{marginRight: 8}} />
-                <Text style={styles.connectButtonText}>{isConnected ? "Conectado" : "Conectar"}</Text>
+                <Text style={styles.connectButtonText}>
+                    {isConnected ? t('connected') : t('connect')}
+                </Text>
              </TouchableOpacity>
           </View>
         )}
@@ -126,6 +132,7 @@ function DiscoveryCard({
 
 // --- FOOTER ---
 function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg, isLiked }: any) {
+  const { t } = useTranslation();
   const [msg, setMsg] = useState('');
   const [localLoading, setLocalLoading] = useState(false);
 
@@ -150,7 +157,7 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
         <View style={styles.messageInputPill}>
           <TextInput 
             style={styles.inputMessage} 
-            placeholder="Envie uma mensagem..." 
+            placeholder={t('send_message_placeholder')} 
             placeholderTextColor="#6B7280" 
             value={msg} 
             onChangeText={setMsg} 
@@ -180,7 +187,8 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
 // --- TELA PRINCIPAL ---
 export default function DiscoveryScreen() {
   const navigation = useNavigation<any>();
-  const insets = useSafeAreaInsets(); 
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation(); 
   
   const [citySearch, setCitySearch] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -239,23 +247,23 @@ export default function DiscoveryScreen() {
     try {
       const { data } = await api.get('/profile/geocode', { params: { city: cityToSearch } });
       if (data.lat && data.lng) { setLocationFilter(data); setSelectedCityName(cityToSearch); }
-    } catch (e) { Alert.alert('Erro', 'Cidade não encontrada'); setLocationFilter(null); setSelectedCityName(undefined); } 
+    } catch (e) { Alert.alert(t('error'), t('error_city_not_found')); setLocationFilter(null); setSelectedCityName(undefined); } 
     finally { setIsSearching(false); }
   };
 
   const handleLikePress = async () => {
     if (!currentProfile) return;
-    setIsLikedCurrent(true); showToast("Like enviado! ❤️", "heart");
+    setIsLikedCurrent(true); showToast(t('toast_like_sent'), "heart");
     try { await like(currentProfile.userId); setTimeout(() => removeCurrentProfile(), 500); } 
-    catch (error) { setIsLikedCurrent(false); Alert.alert("Erro", "Falha ao enviar like."); }
+    catch (error) { setIsLikedCurrent(false); Alert.alert(t('error'), t('error_like_failed')); }
   };
 
   const handleConnectPress = () => {
       if (!currentProfile) return;
-      setIsConnectedCurrent(true); showToast("Você seguiu este usuário! 👤", "person-add");
+      setIsConnectedCurrent(true); showToast(t('toast_followed'), "person-add");
       followUser(currentProfile.userId, {
           onSuccess: () => { setTimeout(() => removeCurrentProfile(), 800); },
-          onError: () => { setIsConnectedCurrent(false); Alert.alert("Erro", "Falha ao seguir."); }
+          onError: () => { setIsConnectedCurrent(false); Alert.alert(t('error'), t('error_follow_failed')); }
       });
   };
 
@@ -263,10 +271,10 @@ export default function DiscoveryScreen() {
     if (!currentProfile) return;
     try {
         await sendIcebreaker({ userId: currentProfile.userId, content: message });
-        showToast("Mensagem enviada! 🚀", "paper-plane");
+        showToast(t('toast_message_sent'), "paper-plane");
     } catch (error: any) { 
         if (error?.response?.status === 402) throw error; 
-        Alert.alert("Erro", "Falha no envio."); throw error;
+        Alert.alert(t('error'), t('error_send_failed')); throw error;
     }
   };
 
@@ -276,8 +284,8 @@ export default function DiscoveryScreen() {
     return (
       <View style={styles.centerContainer}>
         <Ionicons name="alert-circle" size={60} color="#F59E0B" />
-        <Text style={styles.infoTitle}>Complete seu perfil primeiro!</Text>
-        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.actionButtonText}>Editar Perfil</Text></TouchableOpacity>
+        <Text style={styles.infoTitle}>{t('complete_profile_first')}</Text>
+        <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('EditProfile')}><Text style={styles.actionButtonText}>{t('edit_profile')}</Text></TouchableOpacity>
       </View>
     );
   }
@@ -285,25 +293,24 @@ export default function DiscoveryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <CustomToast message={toastMessage} visible={toastVisible} icon={toastIcon} />
-      
-      {/* --- CORREÇÃO AQUI: 'height' para Android --- */}
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={{flex: 1}} 
-        enabled 
-        keyboardVerticalOffset={20}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{flex: 1}} enabled={activeInput === 'message'} keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
         
-        <View style={[styles.searchWrapper, { paddingTop: insets.top + 10 }]}>
+        <View style={[
+            styles.searchWrapper, 
+            { paddingTop: Platform.OS === 'android' ? insets.top + 15 : insets.top }
+        ]}>
             <View style={styles.headerContainer}>
               <View style={styles.inputWrapper}>
                 <Ionicons name="location" size={18} color="#9CA3AF" style={{marginRight: 8}} />
-                <TextInput style={styles.input} placeholder="Filtrar por cidade..." placeholderTextColor="#6B7280" value={citySearch} onChangeText={searchCity} onFocus={() => setActiveInput('city')} onSubmitEditing={() => handleSearchPress()} returnKeyType="search" />
+                <TextInput style={styles.input} placeholder={t('filter_city_placeholder')} placeholderTextColor="#6B7280" value={citySearch} onChangeText={searchCity} onFocus={() => setActiveInput('city')} onSubmitEditing={() => handleSearchPress()} returnKeyType="search" />
               </View>
-              <TouchableOpacity style={styles.searchButton} onPress={() => handleSearchPress()}><Text style={styles.searchButtonText}>Filtrar</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.searchButton} onPress={() => handleSearchPress()}><Text style={styles.searchButtonText}>{t('filter_button')}</Text></TouchableOpacity>
             </View>
             {suggestions.length > 0 && (
-              <View style={[styles.suggestionsList, { top: insets.top + 65 }]}>
+              <View style={[
+                  styles.suggestionsList, 
+                  { top: Platform.OS === 'android' ? insets.top + 70 : insets.top + 55 }
+              ]}>
                 {suggestions.map((item, i) => (
                   <TouchableOpacity key={i} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}><Text style={{color:'#D1D5DB'}}>{item}</Text></TouchableOpacity>
                 ))}
@@ -317,9 +324,9 @@ export default function DiscoveryScreen() {
               {!isLoading && !isSearching && isQueueEmpty && (
                  <View style={{alignItems: 'center'}}>
                     <Ionicons name="telescope-outline" size={60} color="#4B5563" />
-                    <Text style={{color: '#9CA3AF', marginTop: 15, fontSize: 16}}>Ninguém por perto</Text>
-                    <Text style={{color: '#6B7280', marginTop: 5, fontSize: 12}}>Tente ajustar o filtro.</Text>
-                    <TouchableOpacity onPress={() => refetchQueue()} style={{marginTop: 20}}><Text style={{color: '#8B5CF6', fontWeight:'bold'}}>Tentar Novamente</Text></TouchableOpacity>
+                    <Text style={{color: '#9CA3AF', marginTop: 15, fontSize: 16}}>{t('nobody_nearby')}</Text>
+                    <Text style={{color: '#6B7280', marginTop: 5, fontSize: 12}}>{t('try_adjust_filter')}</Text>
+                    <TouchableOpacity onPress={() => refetchQueue()} style={{marginTop: 20}}><Text style={{color: '#8B5CF6', fontWeight:'bold'}}>{t('try_again')}</Text></TouchableOpacity>
                  </View>
               )}
               {!isLoading && !isSearching && currentProfile && (
