@@ -16,7 +16,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Lógica
+// 1. IMPORTAÇÃO DA TRADUÇÃO
+import { useTranslation } from 'react-i18next';
+
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 import { registerSchema, RegisterDto, AuthResponse } from '../types/auth.types';
@@ -26,13 +28,15 @@ export const RegisterScreen = () => {
   const navigation = useNavigation<any>();
   const { setUser } = useAuth();
   
+  // 2. ATIVA O HOOK
+  const { t } = useTranslation();
+  
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterDto>({
     resolver: zodResolver(registerSchema),
   });
 
   const onRegister = async (data: RegisterDto) => {
     try {
-      // Remove confirmPassword antes de enviar (igual à Web)
       const { confirmPassword, ...payload } = data;
       
       const response = await api.post<AuthResponse>('/auth/register', payload);
@@ -40,16 +44,14 @@ export const RegisterScreen = () => {
       
       await storage.setToken(accessToken);
       setUser(user);
-      // Redirecionamento automático pelo App.tsx
       
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Erro ao criar conta. Tente novamente.';
-      Alert.alert('Erro de Registro', msg);
+      const msg = error.response?.data?.message || t('error'); // Usa tradução genérica ou msg do server
+      Alert.alert(t('error'), msg);
     }
   };
 
   return (
-    // bg-gray-900 (#111827)
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
@@ -57,18 +59,16 @@ export const RegisterScreen = () => {
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           
-          {/* --- CABEÇALHO (Igual ao Login) --- */}
           <View style={styles.headerContainer}>
-             {/* Título "CosmosMatch" em Indigo */}
-            <Text style={styles.title}>CosmosMatch</Text>
+             {/* Usa o nome do app traduzido/fixo no dicionário */}
+            <Text style={styles.title}>{t('app_name')}</Text>
           </View>
 
-          {/* --- FORMULÁRIO --- */}
           <View style={styles.formContainer}>
             
-            {/* NOME (Exibição) */}
+            {/* NOME */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nome (Exibição)</Text>
+              <Text style={styles.label}>{t('name_placeholder')}</Text>
               <Controller
                 control={control}
                 name="name"
@@ -86,9 +86,9 @@ export const RegisterScreen = () => {
               {errors.name && <Text style={styles.errorText}>{errors.name.message}</Text>}
             </View>
 
-            {/* USERNAME (@) */}
+            {/* USERNAME (@) - Nova chave 'username_label' */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nome de Utilizador (o seu @)</Text>
+              <Text style={styles.label}>{t('username_label')}</Text>
               <Controller
                 control={control}
                 name="username"
@@ -103,14 +103,14 @@ export const RegisterScreen = () => {
                   />
                 )}
               />
-              {/* Helper text igual da Web */}
-              <Text style={styles.helperText}>(Apenas letras, números e _. Ex: joao_silva)</Text>
+              {/* Nova chave 'username_helper' */}
+              <Text style={styles.helperText}>{t('username_helper')}</Text>
               {errors.username && <Text style={styles.errorText}>{errors.username.message}</Text>}
             </View>
 
             {/* EMAIL */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Endereço de email</Text>
+              <Text style={styles.label}>{t('email_placeholder')}</Text>
               <Controller
                 control={control}
                 name="email"
@@ -131,7 +131,7 @@ export const RegisterScreen = () => {
 
             {/* SENHA */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Senha</Text>
+              <Text style={styles.label}>{t('password_placeholder')}</Text>
               <Controller
                 control={control}
                 name="password"
@@ -149,9 +149,9 @@ export const RegisterScreen = () => {
               {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
             </View>
 
-            {/* CONFIRMAR SENHA */}
+            {/* CONFIRMAR SENHA - Nova chave 'confirm_password_label' */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Confirmar Senha</Text>
+              <Text style={styles.label}>{t('confirm_password_label')}</Text>
               <Controller
                 control={control}
                 name="confirmPassword"
@@ -169,7 +169,7 @@ export const RegisterScreen = () => {
               {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>}
             </View>
 
-            {/* BOTÃO CRIAR CONTA */}
+            {/* BOTÃO */}
             <TouchableOpacity 
               style={[styles.submitButton, isSubmitting && styles.buttonDisabled]}
               onPress={handleSubmit(onRegister)}
@@ -178,17 +178,17 @@ export const RegisterScreen = () => {
               {isSubmitting ? (
                 <ActivityIndicator color="#FFF" />
               ) : (
-                <Text style={styles.submitButtonText}>Criar conta</Text>
+                <Text style={styles.submitButtonText}>{t('register_button')}</Text>
               )}
             </TouchableOpacity>
 
           </View>
 
-          {/* --- RODAPÉ --- */}
+          {/* RODAPÉ */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Já é membro? </Text>
+            <Text style={styles.footerText}>{t('already_account')} </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.loginLink}>Entre na sua conta</Text>
+              <Text style={styles.loginLink}>{t('login_link')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -198,20 +198,18 @@ export const RegisterScreen = () => {
   );
 };
 
-// --- ESTILOS (Idênticos ao LoginScreen para consistência) ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827', // bg-gray-900
+    backgroundColor: '#111827', 
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24, // px-6
-    paddingVertical: 48,   // py-12
+    paddingHorizontal: 24, 
+    paddingVertical: 48,   
   },
   
-  // Header
   headerContainer: {
     alignItems: 'center',
     marginBottom: 40,
@@ -221,31 +219,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 30,
     fontWeight: 'bold',
-    color: '#6366F1', // text-indigo-500
+    color: '#6366F1', 
     letterSpacing: -0.5,
   },
 
-  // Form
   formContainer: {
     width: '100%',
   },
   inputGroup: {
-    marginBottom: 24, // space-y-6
+    marginBottom: 24, 
   },
   label: {
-    fontSize: 14, // text-sm
-    fontWeight: '500', // font-medium
-    color: '#D1D5DB', // text-gray-300
+    fontSize: 14, 
+    fontWeight: '500', 
+    color: '#D1D5DB', 
     marginBottom: 8,
   },
   helperText: {
-    fontSize: 12, // text-xs
-    color: '#9CA3AF', // text-gray-400
+    fontSize: 12, 
+    color: '#9CA3AF', 
     marginTop: 4,
   },
   input: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)', // bg-white/5
+    backgroundColor: 'rgba(255, 255, 255, 0.05)', 
     borderRadius: 6,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -257,16 +254,15 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#F87171', // text-red-400
+    color: '#F87171', 
   },
 
-  // Botão
   submitButton: {
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 6,
-    backgroundColor: '#6366F1', // bg-indigo-500
+    backgroundColor: '#6366F1', 
     paddingVertical: 10,
     marginTop: 10,
   },
@@ -279,7 +275,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
 
-  // Footer
   footer: {
     marginTop: 40,
     flexDirection: 'row',
@@ -288,12 +283,12 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: '#9CA3AF', // text-gray-400
+    color: '#9CA3AF', 
   },
   loginLink: {
     fontSize: 14, 
     fontWeight: '600',
-    color: '#818CF8', // text-indigo-400
+    color: '#818CF8', 
     marginLeft: 4,
   }
 });
