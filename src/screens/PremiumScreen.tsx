@@ -46,7 +46,7 @@ export function PremiumScreen() {
     }
   };
 
-  // --- LÓGICA DE PAGAMENTO CORRIGIDA (LINK + AVISO CPF) ---
+  // --- LÓGICA DE PAGAMENTO AJUSTADA ---
   const handleSubscribeClick = () => {
     if (isPending) return;
     
@@ -54,31 +54,25 @@ export function PremiumScreen() {
         onSuccess: (data: any) => {
             console.log("Resposta Pagamento:", data);
             
-            // Tenta pegar o link de pagamento
             const url = data?.checkoutUrl || data?.invoiceUrl || data?.url || data?.paymentLink;
 
             if (url) {
-                // Abre o navegador do celular
                 Linking.openURL(url).catch((err) => {
                     console.error("Não foi possível abrir o link:", err);
-                    Alert.alert("Erro", "Não foi possível abrir o link de pagamento no navegador.");
+                    Alert.alert("Erro", "Não foi possível abrir o navegador.");
                 });
             } else {
-                Alert.alert("Erro", "Link de pagamento não recebido do servidor.");
+                Alert.alert("Erro", "Link de pagamento não recebido.");
             }
         },
+        // --- MUDANÇA AQUI: Mensagem clara para QUALQUER erro ---
         onError: (error: any) => {
             console.log("Erro Asaas:", error);
             
-            // Se der erro 500 ou 400, geralmente é falta de dados do cliente (CPF/Endereço)
-            if (error?.response?.status === 500 || error?.response?.status === 400) {
-                Alert.alert(
-                    "Atenção", 
-                    "Não foi possível gerar a cobrança. \n\nPor favor, vá em Editar Perfil e verifique se o seu CPF/CNPJ está preenchido corretamente."
-                );
-            } else {
-                Alert.alert("Erro", "Não foi possível iniciar o pagamento. Tente novamente mais tarde.");
-            }
+            Alert.alert(
+                "Atenção: Assinatura não criada", 
+                "O sistema de pagamento recusou seus dados.\n\nIsso geralmente acontece quando o CPF/CNPJ informado no perfil está incorreto ou inválido.\n\nPor favor, vá em 'Editar Perfil' e verifique seu documento."
+            );
         }
     });
   };
@@ -89,7 +83,6 @@ export function PremiumScreen() {
         
         <View style={styles.card}>
             
-            {/* BOTÃO X */}
             <TouchableOpacity 
               onPress={handleGoToSafePage} 
               style={styles.closeButton}
