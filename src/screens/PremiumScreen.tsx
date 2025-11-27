@@ -18,7 +18,7 @@ export function PremiumScreen() {
   
   const { mutate: createSubscription, isPending } = useCreateSubscription();
 
-  // --- LÓGICA DE FECHAMENTO (MANTIDA) ---
+  // --- NAVEGAÇÃO SEGURA (FECHAR) ---
   const handleGoToSafePage = () => {
     try {
       if (routes.length > 1) {
@@ -46,7 +46,7 @@ export function PremiumScreen() {
     }
   };
 
-  // --- LÓGICA DE PAGAMENTO AJUSTADA ---
+  // --- PAGAMENTO COM TRATAMENTO DE ERRO INTELIGENTE ---
   const handleSubscribeClick = () => {
     if (isPending) return;
     
@@ -65,14 +65,27 @@ export function PremiumScreen() {
                 Alert.alert("Erro", "Link de pagamento não recebido.");
             }
         },
-        // --- MUDANÇA AQUI: Mensagem clara para QUALQUER erro ---
         onError: (error: any) => {
-            console.log("Erro Asaas:", error);
-            
-            Alert.alert(
-                "Atenção: Assinatura não criada", 
-                "O sistema de pagamento recusou seus dados.\n\nIsso geralmente acontece quando o CPF/CNPJ informado no perfil está incorreto ou inválido.\n\nPor favor, vá em 'Editar Perfil' e verifique seu documento."
-            );
+            console.log("Erro Completo:", error);
+            const status = error?.response?.status;
+
+            // Se for Erro 400 ou 500, é quase certeza que é dado inválido (CPF/Tel)
+            if (status === 400 || status === 500) {
+                Alert.alert(
+                    "Dados Incompletos ou Inválidos", 
+                    "O sistema de pagamento recusou a transação.\n\nIsso acontece quando o CPF ou Telefone no seu perfil é inválido.\n\nPor favor, corrija seus dados.",
+                    [
+                        { text: "Cancelar", style: "cancel" },
+                        { 
+                            text: "Ir para Editar Perfil", 
+                            onPress: () => navigation.navigate('EditProfileScreen') // Leva o usuário direto para resolver
+                        }
+                    ]
+                );
+            } else {
+                // Outros erros (ex: internet, servidor fora do ar)
+                Alert.alert("Erro", "Não foi possível conectar ao servidor de pagamento. Tente novamente.");
+            }
         }
     });
   };
