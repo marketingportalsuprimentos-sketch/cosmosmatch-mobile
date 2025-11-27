@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, Linking // <--- IMPORT LINKING
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, Linking 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +18,7 @@ export function PremiumScreen() {
   
   const { mutate: createSubscription, isPending } = useCreateSubscription();
 
-  // --- LÓGICA DE FECHAMENTO (MANTIDA IGUAL) ---
+  // --- LÓGICA DE FECHAMENTO (MANTIDA) ---
   const handleGoToSafePage = () => {
     try {
       if (routes.length > 1) {
@@ -46,7 +46,7 @@ export function PremiumScreen() {
     }
   };
 
-  // --- CORREÇÃO DO PAGAMENTO (ABRIR NAVEGADOR) ---
+  // --- LÓGICA DE PAGAMENTO CORRIGIDA (LINK + AVISO CPF) ---
   const handleSubscribeClick = () => {
     if (isPending) return;
     
@@ -54,23 +54,31 @@ export function PremiumScreen() {
         onSuccess: (data: any) => {
             console.log("Resposta Pagamento:", data);
             
-            // O backend geralmente retorna { checkoutUrl: 'https://...' } ou { url: '...' }
-            // Vamos tentar pegar qualquer campo que pareça um link
+            // Tenta pegar o link de pagamento
             const url = data?.checkoutUrl || data?.invoiceUrl || data?.url || data?.paymentLink;
 
             if (url) {
-                // COMANDO PARA ABRIR O NAVEGADOR
+                // Abre o navegador do celular
                 Linking.openURL(url).catch((err) => {
                     console.error("Não foi possível abrir o link:", err);
-                    Alert.alert("Erro", "Não foi possível abrir o link de pagamento.");
+                    Alert.alert("Erro", "Não foi possível abrir o link de pagamento no navegador.");
                 });
             } else {
                 Alert.alert("Erro", "Link de pagamento não recebido do servidor.");
             }
         },
-        onError: (error) => {
+        onError: (error: any) => {
             console.log("Erro Asaas:", error);
-            Alert.alert("Erro", "Não foi possível iniciar o pagamento. Tente novamente.");
+            
+            // Se der erro 500 ou 400, geralmente é falta de dados do cliente (CPF/Endereço)
+            if (error?.response?.status === 500 || error?.response?.status === 400) {
+                Alert.alert(
+                    "Atenção", 
+                    "Não foi possível gerar a cobrança. \n\nPor favor, vá em Editar Perfil e verifique se o seu CPF/CNPJ está preenchido corretamente."
+                );
+            } else {
+                Alert.alert("Erro", "Não foi possível iniciar o pagamento. Tente novamente mais tarde.");
+            }
         }
     });
   };
