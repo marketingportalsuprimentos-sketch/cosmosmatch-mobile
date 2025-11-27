@@ -176,10 +176,16 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
     const navigation = useNavigation(); 
     const { t } = useTranslation();
     const { user: loggedInUser } = useAuth();
-    const [activeTab, setActiveTab] = React.useState<'followers' | 'following'>('followers');
+    
+    // --- MUDANÇA: 'following' agora é o padrão (Primeira Aba) ---
+    const [activeTab, setActiveTab] = React.useState<'following' | 'followers'>('following');
+    
     const { data: followers } = useGetFollowers(userId);
     const { data: following } = useGetFollowing(userId);
+    
+    // Lista correta baseada na aba
     const list = activeTab === 'followers' ? followers : following;
+    
     const countFollowers = followers?.length || 0;
     const countFollowing = following?.length || 0;
     const { data: myFollowing } = useGetFollowing(loggedInUser?.id);
@@ -192,8 +198,9 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
         <View style={styles.card}>
             <Text style={styles.cardTitle}>{t('orbit_connections')}</Text>
             <View style={styles.tabsRow}>
-                <TouchableOpacity style={[styles.tabItem, activeTab === 'followers' && styles.activeTab]} onPress={() => setActiveTab('followers')}><Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>{t('followers')} ({countFollowers})</Text></TouchableOpacity>
+                {/* --- MUDANÇA: Inverti a ordem. Seguindo vem primeiro. --- */}
                 <TouchableOpacity style={[styles.tabItem, activeTab === 'following' && styles.activeTab]} onPress={() => setActiveTab('following')}><Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>{t('following')} ({countFollowing})</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.tabItem, activeTab === 'followers' && styles.activeTab]} onPress={() => setActiveTab('followers')}><Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>{t('followers')} ({countFollowers})</Text></TouchableOpacity>
             </View>
             <View style={{ height: (list && list.length > 3) ? MAX_CONNECTIONS_HEIGHT : 'auto' }}>
                 <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
@@ -296,7 +303,6 @@ export default function ProfileScreen() {
   const { mutate: addPhoto, isPending: isUploading } = useAddPhotoToGallery();
   const { mutate: sendMessage, isPending: isSendingMessage } = useCreateOrGetConversation();
   
-  // --- CORREÇÃO DE DADOS REAIS PARA O CADEADO ---
   const { data: followers } = useGetFollowers(targetUserId);
   const { data: following } = useGetFollowing(targetUserId);
 
@@ -340,11 +346,9 @@ export default function ProfileScreen() {
 
   const sunSign = profileData.natalChart?.planets?.find((p: any) => p.name === 'Sol')?.sign || 'Cosmos';
   
-  // LÓGICA DE BLOQUEIO COM DADOS REAIS
   const MIN_FOLLOWERS = 5;
   const MIN_FOLLOWING = 10;
   
-  // Usa o tamanho dos arrays de dados, ou 0 se ainda estiver carregando
   const followersCount = followers?.length || 0;
   const followingCount = following?.length || 0;
   

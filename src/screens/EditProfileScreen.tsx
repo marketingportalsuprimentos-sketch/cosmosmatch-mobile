@@ -8,7 +8,6 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ArrowLeft, Info, Lock, Camera, ChevronDown, Check, X } from 'lucide-react-native';
-// 1. IMPORT I18N
 import { useTranslation } from 'react-i18next';
 
 import { useGetMyProfile, useUpdateProfile, useUpdateAvatar } from '../features/profile/hooks/useProfile';
@@ -18,11 +17,9 @@ import { CityAutocomplete } from '../components/ui/CityAutocomplete';
 LogBox.ignoreLogs(['VirtualizedLists should never be nested']);
 
 export const EditProfileScreen = () => {
-  const navigation = useNavigation();
-  // 2. HOOK
+  const navigation = useNavigation<any>();
   const { t } = useTranslation();
   
-  // 3. Opções de Gênero Traduzidas
   const GENDER_OPTIONS = [
     { label: t('gender_male'), value: 'MALE' },
     { label: t('gender_female'), value: 'FEMALE' },
@@ -87,8 +84,16 @@ export const EditProfileScreen = () => {
 
   const handleSubmit = async () => {
     try {
+        // === VALIDAÇÃO 1: Campos de Texto ===
         if (!birthCity || !currentCity || !gender || !cpfCnpj) {
             Alert.alert(t('required_fields_title'), t('required_fields_msg'));
+            return;
+        }
+
+        // === VALIDAÇÃO 2: Foto Obrigatória (NOVO) ===
+        // Se avatarUri for nulo ou vazio, bloqueia.
+        if (!avatarUri) {
+            Alert.alert(t('required_fields_title'), "A foto de perfil é obrigatória para continuar.");
             return;
         }
 
@@ -109,7 +114,11 @@ export const EditProfileScreen = () => {
             await updateAvatar(avatarUri);
         }
 
-        navigation.goBack();
+        // Sucesso: Avança para o App
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
         
     } catch (error) {
         console.error("Erro ao salvar perfil:", error);
@@ -173,7 +182,7 @@ export const EditProfileScreen = () => {
         <DateTimePicker 
             value={value} 
             mode={mode} 
-            display="default"
+            display="spinner" 
             onChange={(e, date) => {
                 setShow(false);
                 if (date) onChange(date);
@@ -184,7 +193,11 @@ export const EditProfileScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         
         <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -197,6 +210,7 @@ export const EditProfileScreen = () => {
         <ScrollView 
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps='always'
+            showsVerticalScrollIndicator={false}
         >
             
             <View style={styles.avatarSection}>
@@ -326,6 +340,8 @@ export const EditProfileScreen = () => {
                     <Text style={styles.saveText}>{t('save_profile_button')}</Text>
                 )}
             </TouchableOpacity>
+
+            <View style={{ height: 60 }} />
 
         </ScrollView>
 

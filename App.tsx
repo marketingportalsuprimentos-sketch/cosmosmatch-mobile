@@ -30,15 +30,20 @@ import { SearchUsersScreen } from './src/screens/SearchUsersScreen';
 import PostCreationScreen from './src/screens/PostCreationScreen';
 import BlockedProfilesScreen from './src/screens/BlockedProfilesScreen';
 
+// Tela de Verificação
+import { PleaseVerifyScreen } from './src/screens/PleaseVerifyScreen';
+
 // Tela Premium
 import { PremiumScreen } from './src/screens/PremiumScreen';
 
 import { TabBar } from './src/components/layout/TabBar';
 import { navigationRef } from './src/navigation/navigationRef'; 
 
-// --- IMPORTAÇÃO DE IDIOMAS (ESSENCIAL) ---
 import './src/i18n'; 
-// ------------------------------------------
+
+// === CONFIGURAÇÃO DE REGRAS ===
+const GRACE_PERIOD_HOURS = 36; // Bloqueia após 36 horas
+const NEW_REGISTRATION_MINUTES = 5; // Considera "Novo Cadastro" nos primeiros 5 min
 
 const queryClient = new QueryClient();
 const Stack = createNativeStackNavigator();
@@ -70,32 +75,87 @@ const AppNavigator = () => {
     );
   }
 
+  // === LÓGICA DE NAVEGAÇÃO INTELIGENTE ===
+  let isBlocked = false;
+  let isJustRegistered = false;
+
+  if (user) {
+    const isVerified = (user as any).emailVerified === true;
+
+    if (!isVerified) {
+      // Calcula tempos
+      const createdAt = (user as any).createdAt ? new Date((user as any).createdAt) : new Date();
+      const now = new Date();
+      const diffInMs = now.getTime() - createdAt.getTime();
+      const diffInHours = diffInMs / (1000 * 60 * 60);
+      const diffInMinutes = diffInMs / (1000 * 60);
+
+      // REGRA 3 (Cadastro): Se acabou de criar (menos de 5 min), força o fluxo de verificação
+      if (diffInMinutes < NEW_REGISTRATION_MINUTES) {
+        isJustRegistered = true;
+      }
+      
+      // REGRA 2 (Bloqueio): Se passou de 36h, bloqueia
+      if (diffInHours > GRACE_PERIOD_HOURS) {
+        isBlocked = true;
+      }
+    }
+  }
+
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {user ? (
-        <>
-          <Stack.Screen name="MainTabs" component={AppTabs} />
-          
-          <Stack.Screen name="ChatConversation" component={ChatConversationScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} options={{ animation: 'slide_from_bottom' }} /> 
-          <Stack.Screen name="NatalChartScreen" component={NatalChartScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="PublicProfile" component={ProfileScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="SynastryReport" component={SynastryReportScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="NumerologyConnection" component={NumerologyConnectionScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="SearchUsers" component={SearchUsersScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="BlockedProfiles" component={BlockedProfilesScreen} options={{ animation: 'slide_from_right' }} />
-          
-          {/* Rota Premium */}
-          <Stack.Screen 
-            name="Premium" 
-            component={PremiumScreen} 
-            options={{ 
-              presentation: 'modal', 
-              animation: 'slide_from_bottom'
-            }} 
-          />
-        </>
+        // === USUÁRIO LOGADO ===
+        isBlocked ? (
+          // CENÁRIO: BLOQUEADO (> 36h)
+          // Só vê a tela de verificação
+          <>
+            <Stack.Screen name="PleaseVerify" component={PleaseVerifyScreen} />
+            {/* Deixamos EditProfile acessível caso precise corrigir o email */}
+            <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} options={{ animation: 'slide_from_bottom' }} /> 
+          </>
+        ) : (
+          // CENÁRIO: LIBERADO (Verificado ou < 36h)
+          <>
+            {/* LÓGICA DE PRIORIDADE DA TELA INICIAL */}
+            
+            {isJustRegistered ? (
+               // Se acabou de cadastrar: 1º Tela é Verificação -> Continuar -> EditProfile
+               <Stack.Screen name="PleaseVerify" component={PleaseVerifyScreen} />
+            ) : (
+               // Se é login normal: 1º Tela é Descoberta
+               <Stack.Screen name="MainTabs" component={AppTabs} />
+            )}
+
+            {/* Definimos as rotas restantes para a navegação funcionar */}
+            
+            {isJustRegistered ? (
+               <Stack.Screen name="MainTabs" component={AppTabs} />
+            ) : (
+               <Stack.Screen name="PleaseVerify" component={PleaseVerifyScreen} />
+            )}
+            
+            <Stack.Screen name="ChatConversation" component={ChatConversationScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} options={{ animation: 'slide_from_bottom' }} /> 
+            <Stack.Screen name="NatalChartScreen" component={NatalChartScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="PublicProfile" component={ProfileScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="SynastryReport" component={SynastryReportScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="NumerologyConnection" component={NumerologyConnectionScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="SearchUsers" component={SearchUsersScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="BlockedProfiles" component={BlockedProfilesScreen} options={{ animation: 'slide_from_right' }} />
+            
+            <Stack.Screen 
+              name="Premium" 
+              component={PremiumScreen} 
+              options={{ 
+                presentation: 'modal', 
+                animation: 'slide_from_bottom'
+              }} 
+            />
+          </>
+        )
       ) : (
+        // === NÃO LOGADO ===
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
@@ -108,7 +168,6 @@ const AppNavigator = () => {
 
 export default function App() {
   
-  // --- CONFIGURAÇÃO GLOBAL: MODO IMERSIVO NO ANDROID ---
   useEffect(() => {
     const configureImmersiveMode = async () => {
       if (Platform.OS === 'android') {

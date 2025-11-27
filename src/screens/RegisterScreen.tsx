@@ -15,8 +15,6 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// 1. IMPORTAÇÃO DA TRADUÇÃO
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -27,8 +25,6 @@ import { storage } from '../lib/storage';
 export const RegisterScreen = () => {
   const navigation = useNavigation<any>();
   const { setUser } = useAuth();
-  
-  // 2. ATIVA O HOOK
   const { t } = useTranslation();
   
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterDto>({
@@ -42,11 +38,14 @@ export const RegisterScreen = () => {
       const response = await api.post<AuthResponse>('/auth/register', payload);
       const { accessToken, user } = response.data;
       
+      // Salva token e usuário
+      // O App.tsx vai detectar a mudança de usuário e
+      // automaticamente mostrar a tela 'PleaseVerify' se o email não estiver verificado.
       await storage.setToken(accessToken);
       setUser(user);
       
     } catch (error: any) {
-      const msg = error.response?.data?.message || t('error'); // Usa tradução genérica ou msg do server
+      const msg = error.response?.data?.message || t('error');
       Alert.alert(t('error'), msg);
     }
   };
@@ -60,7 +59,6 @@ export const RegisterScreen = () => {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           
           <View style={styles.headerContainer}>
-             {/* Usa o nome do app traduzido/fixo no dicionário */}
             <Text style={styles.title}>{t('app_name')}</Text>
           </View>
 
@@ -86,7 +84,7 @@ export const RegisterScreen = () => {
               {errors.name && <Text style={styles.errorText}>{errors.name.message}</Text>}
             </View>
 
-            {/* USERNAME (@) - Nova chave 'username_label' */}
+            {/* USERNAME */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>{t('username_label')}</Text>
               <Controller
@@ -103,7 +101,6 @@ export const RegisterScreen = () => {
                   />
                 )}
               />
-              {/* Nova chave 'username_helper' */}
               <Text style={styles.helperText}>{t('username_helper')}</Text>
               {errors.username && <Text style={styles.errorText}>{errors.username.message}</Text>}
             </View>
@@ -149,7 +146,7 @@ export const RegisterScreen = () => {
               {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
             </View>
 
-            {/* CONFIRMAR SENHA - Nova chave 'confirm_password_label' */}
+            {/* CONFIRMAR SENHA */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>{t('confirm_password_label')}</Text>
               <Controller
@@ -209,7 +206,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, 
     paddingVertical: 48,   
   },
-  
   headerContainer: {
     alignItems: 'center',
     marginBottom: 40,
@@ -222,7 +218,6 @@ const styles = StyleSheet.create({
     color: '#6366F1', 
     letterSpacing: -0.5,
   },
-
   formContainer: {
     width: '100%',
   },
@@ -256,7 +251,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#F87171', 
   },
-
   submitButton: {
     width: '100%',
     justifyContent: 'center',
@@ -274,7 +268,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-
   footer: {
     marginTop: 40,
     flexDirection: 'row',

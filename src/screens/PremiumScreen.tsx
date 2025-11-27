@@ -1,32 +1,78 @@
 import React from 'react';
 import { 
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform 
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, Linking // <--- IMPORT LINKING
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next'; // <--- IMPORT I18N
+import { useNavigation, useNavigationState } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { useCreateSubscription } from '../features/payment/hooks/usePaymentMutations';
 
 export function PremiumScreen() {
   const navigation = useNavigation<any>();
-  const { t } = useTranslation(); // <--- HOOK
+  const { t } = useTranslation();
+  
+  const routes = useNavigationState(state => state.routes);
   
   const { mutate: createSubscription, isPending } = useCreateSubscription();
 
+  // --- LÓGICA DE FECHAMENTO (MANTIDA IGUAL) ---
   const handleGoToSafePage = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('MainTabs', { screen: 'DiscoveryTab' });
+    try {
+      if (routes.length > 1) {
+        const previousRouteName = routes[routes.length - 2].name;
+        const trapScreens = ['SynastryReport', 'NumerologyConnection', 'NatalChartScreen'];
+
+        if (trapScreens.includes(previousRouteName)) {
+          if (routes.length >= 3) {
+             navigation.pop(2); 
+             return;
+          } else {
+             navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+             return;
+          }
+        }
+      }
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+      }
+    } catch (error) {
+      console.log("Erro na navegação Premium:", error);
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
     }
   };
 
+  // --- CORREÇÃO DO PAGAMENTO (ABRIR NAVEGADOR) ---
   const handleSubscribeClick = () => {
     if (isPending) return;
-    createSubscription();
+    
+    createSubscription(undefined, {
+        onSuccess: (data: any) => {
+            console.log("Resposta Pagamento:", data);
+            
+            // O backend geralmente retorna { checkoutUrl: 'https://...' } ou { url: '...' }
+            // Vamos tentar pegar qualquer campo que pareça um link
+            const url = data?.checkoutUrl || data?.invoiceUrl || data?.url || data?.paymentLink;
+
+            if (url) {
+                // COMANDO PARA ABRIR O NAVEGADOR
+                Linking.openURL(url).catch((err) => {
+                    console.error("Não foi possível abrir o link:", err);
+                    Alert.alert("Erro", "Não foi possível abrir o link de pagamento.");
+                });
+            } else {
+                Alert.alert("Erro", "Link de pagamento não recebido do servidor.");
+            }
+        },
+        onError: (error) => {
+            console.log("Erro Asaas:", error);
+            Alert.alert("Erro", "Não foi possível iniciar o pagamento. Tente novamente.");
+        }
+    });
   };
 
   return (
@@ -35,6 +81,7 @@ export function PremiumScreen() {
         
         <View style={styles.card}>
             
+            {/* BOTÃO X */}
             <TouchableOpacity 
               onPress={handleGoToSafePage} 
               style={styles.closeButton}

@@ -48,6 +48,26 @@ const resources = {
       already_account: 'Já tem uma conta?',
       login_link: 'Faça login',
 
+      // Verificação de Email
+      verify_title: 'Verifique seu email',
+      verify_sent_to: 'Enviamos um link de verificação para:',
+      verify_hint: 'Pode continuar para o seu perfil, mas precisará verificar o email para aceder a todas as funcionalidades.',
+      verify_btn_continue: 'Continuar para o Perfil',
+      verify_or: 'Ou',
+      verify_btn_correct: 'Corrigir email',
+      verify_btn_resend: 'Reenviar email',
+      verify_logout: 'Fazer Logout',
+      
+      // Formulário de Correção
+      verify_correct_title: 'Corrigir email',
+      verify_new_email_label: 'Novo endereço de email',
+      verify_password_confirm: 'Confirme a sua senha',
+      verify_btn_cancel: 'Cancelar',
+      verify_btn_save: 'Guardar e Reenviar',
+      verify_alert_success: 'Email reenviado com sucesso!',
+      verify_alert_updated: 'Email atualizado! Verifique sua caixa de entrada.',
+      verify_alert_error: 'Erro ao processar. Tente novamente.',
+
       // Navegação
       tab_discovery: 'Descoberta',
       tab_feed: 'Feed',
