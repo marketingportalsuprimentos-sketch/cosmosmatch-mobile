@@ -18,7 +18,7 @@ export function PremiumScreen() {
   
   const { mutate: createSubscription, isPending } = useCreateSubscription();
 
-  // --- NAVEGAÇÃO SEGURA (FECHAR) ---
+  // --- LÓGICA DE FECHAMENTO ---
   const handleGoToSafePage = () => {
     try {
       if (routes.length > 1) {
@@ -46,7 +46,7 @@ export function PremiumScreen() {
     }
   };
 
-  // --- PAGAMENTO COM TRATAMENTO DE ERRO INTELIGENTE ---
+  // --- LÓGICA DE PAGAMENTO (AGORA TRADUZIDA) ---
   const handleSubscribeClick = () => {
     if (isPending) return;
     
@@ -59,32 +59,32 @@ export function PremiumScreen() {
             if (url) {
                 Linking.openURL(url).catch((err) => {
                     console.error("Não foi possível abrir o link:", err);
-                    Alert.alert("Erro", "Não foi possível abrir o navegador.");
+                    Alert.alert(t('error'), "Não foi possível abrir o navegador.");
                 });
             } else {
-                Alert.alert("Erro", "Link de pagamento não recebido.");
+                Alert.alert(t('error'), "Link de pagamento não recebido.");
             }
         },
         onError: (error: any) => {
-            console.log("Erro Completo:", error);
+            console.log("Erro Asaas:", error);
             const status = error?.response?.status;
 
-            // Se for Erro 400 ou 500, é quase certeza que é dado inválido (CPF/Tel)
+            // Se for Erro 400 ou 500, usamos a mensagem traduzida de CPF
             if (status === 400 || status === 500) {
                 Alert.alert(
-                    "Dados Incompletos ou Inválidos", 
-                    "O sistema de pagamento recusou a transação.\n\nIsso acontece quando o CPF ou Telefone no seu perfil é inválido.\n\nPor favor, corrija seus dados.",
+                    t('premium_error_title'), // "Atenção: Assinatura não criada"
+                    t('premium_error_cpf_msg'), // "O sistema recusou..."
                     [
-                        { text: "Cancelar", style: "cancel" },
+                        { text: t('cancel'), style: "cancel" },
                         { 
-                            text: "Ir para Editar Perfil", 
-                            onPress: () => navigation.navigate('EditProfileScreen') // Leva o usuário direto para resolver
+                            text: t('premium_btn_edit_profile'), // "Ir para Editar Perfil"
+                            onPress: () => navigation.navigate('EditProfileScreen')
                         }
                     ]
                 );
             } else {
-                // Outros erros (ex: internet, servidor fora do ar)
-                Alert.alert("Erro", "Não foi possível conectar ao servidor de pagamento. Tente novamente.");
+                // Erro genérico traduzido
+                Alert.alert(t('error'), t('premium_error_generic'));
             }
         }
     });

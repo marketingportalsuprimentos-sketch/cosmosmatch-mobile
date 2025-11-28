@@ -282,6 +282,12 @@ const resources = {
       unblock: 'Desbloquear',
       no_blocked_users: 'Você não bloqueou ninguém.',
 
+      // Erros de Pagamento (Premium)
+      premium_error_title: 'Atenção: Assinatura não criada',
+      premium_error_cpf_msg: 'O sistema de pagamento recusou os seus dados.\n\nIsso geralmente acontece quando o CPF/CNPJ informado        no perfil está incorreto ou inválido.\n\nPor favor, vá em "Editar Perfil" e verifique o seu documento.',
+      premium_error_generic: 'Não foi possível conectar ao servidor de pagamento. Tente novamente mais tarde.',
+      premium_btn_edit_profile: 'Ir para Editar Perfil',
+
       // --- ASTROLOGIA & RELATÓRIOS (RESTAURADO!) ---
       my_astral_plan_header: 'Meu Plano Astral',
       astrology_section: 'Astrologia',
