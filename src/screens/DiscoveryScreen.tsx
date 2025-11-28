@@ -27,7 +27,9 @@ import { api } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.92;
-const CARD_HEIGHT = SCREEN_HEIGHT * 0.62; 
+
+// --- AJUSTE DE ALTURA (10% MAIOR NO ANDROID) ---
+const CARD_HEIGHT = Platform.OS === 'android' ? SCREEN_HEIGHT * 0.68 : SCREEN_HEIGHT * 0.62;
 
 const CustomToast = ({ message, visible, icon }: { message: string, visible: boolean, icon?: any }) => {
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
@@ -289,7 +291,6 @@ export default function DiscoveryScreen() {
       <CustomToast message={toastMessage} visible={toastVisible} icon={toastIcon} />
       
       <KeyboardAvoidingView 
-        // CORREÇÃO: Android usa 'height' para encolher a tela corretamente
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={{flex: 1}} 
         enabled={activeInput === 'message'} 
@@ -362,7 +363,7 @@ const styles = StyleSheet.create({
   suggestionsList: { position: 'absolute', left: 16, right: 90, backgroundColor: '#1F2937', borderRadius: 10, zIndex: 1000, borderWidth: 1, borderColor:'#374151', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
   suggestionItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#374151' },
   contentContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', zIndex: 1, paddingBottom: 20 },
-  card: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 24, backgroundColor: '#1F2937', overflow: 'hidden', position: 'absolute', elevation: 10, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 10 },
+  card: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 24, backgroundColor: '#1F2937', overflow: 'hidden', position: 'absolute', elevation: 10, shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 10 },
   image: { width: '100%', height: '100%' },
   gradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' },
   topContainer: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, width: '100%', position: 'absolute', top: 0 },
