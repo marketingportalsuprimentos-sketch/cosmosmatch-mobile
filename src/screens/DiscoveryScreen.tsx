@@ -29,7 +29,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.92;
 
 // --- AJUSTE DE ALTURA (10% MAIOR NO ANDROID) ---
-const CARD_HEIGHT = Platform.OS === 'android' ? SCREEN_HEIGHT * 0.68 : SCREEN_HEIGHT * 0.62;
+const CARD_HEIGHT = Platform.OS === 'android' ? SCREEN_HEIGHT * 0.74 : SCREEN_HEIGHT * 0.62;
 
 const CustomToast = ({ message, visible, icon }: { message: string, visible: boolean, icon?: any }) => {
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
