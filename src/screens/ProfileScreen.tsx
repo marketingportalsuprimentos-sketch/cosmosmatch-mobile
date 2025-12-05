@@ -1,10 +1,14 @@
+// mobile/src/screens/ProfileScreen.tsx
 import React, { useState } from 'react';
 import { 
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, Alert, Dimensions, Modal, TouchableWithoutFeedback, TextInput, KeyboardAvoidingView, Platform, Keyboard
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, Alert, Dimensions, Modal, TouchableWithoutFeedback, TextInput, KeyboardAvoidingView, Platform, Keyboard, Linking 
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Settings, MapPin, Pencil, Sparkles, UserPlus, MessageCircle, Ban, ArrowLeft, Check, MoreVertical, LogOut, ShieldAlert, Lock, Calculator, X, Send, Plus } from 'lucide-react-native';
+import { 
+  Settings, MapPin, Pencil, Sparkles, UserPlus, MessageCircle, Ban, ArrowLeft, Check, MoreVertical, LogOut, ShieldAlert, Lock, Calculator, X, Send, Plus, 
+  FileText, Shield 
+} from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 
@@ -110,9 +114,29 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.menuOverlay}>
           <View style={styles.menuContainer}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); onBlocked(); }}><ShieldAlert size={20} color="#D1D5DB" style={{marginRight: 10}} /><Text style={styles.menuText}>{t('manage_blocked')}</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); onBlocked(); }}>
+                <ShieldAlert size={20} color="#D1D5DB" style={{marginRight: 10}} />
+                <Text style={styles.menuText}>{t('manage_blocked')}</Text>
+            </TouchableOpacity>
+            
             <View style={styles.menuDivider} />
-            <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); if (onLogout) onLogout(); }}><LogOut size={20} color="#EF4444" style={{marginRight: 10}} /><Text style={[styles.menuText, {color: '#EF4444'}]}>{t('logout')}</Text></TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); Linking.openURL('https://cosmosmatch-frontend.vercel.app/terms'); }}>
+                <FileText size={20} color="#D1D5DB" style={{marginRight: 10}} />
+                <Text style={styles.menuText}>Termos de Uso</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); Linking.openURL('https://cosmosmatch-frontend.vercel.app/privacy'); }}>
+                <Shield size={20} color="#D1D5DB" style={{marginRight: 10}} />
+                <Text style={styles.menuText}>Política de Privacidade</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); if (onLogout) onLogout(); }}>
+                <LogOut size={20} color="#EF4444" style={{marginRight: 10}} />
+                <Text style={[styles.menuText, {color: '#EF4444'}]}>{t('logout')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableWithoutFeedback>
@@ -120,6 +144,7 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
   );
 };
 
+// --- IDENTITY CARD (Mantido apenas o botão Sintonia/Quiz) ---
 const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress }: any) => {
     const navigation = useNavigation<any>();
     const { t } = useTranslation();
@@ -154,7 +179,12 @@ const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, on
                 {isOwner ? (
                     <>
                         <TouchableOpacity style={styles.btnPrimary} onPress={onEdit}><Settings size={18} color="#FFF" /><Text style={styles.btnText}>{t('edit')}</Text></TouchableOpacity>
-                        <TouchableOpacity style={styles.btnSecondary} onPress={onOpenQuiz}><Sparkles size={18} color="#FFF" /><Text style={styles.btnText}>{t('harmony')}</Text></TouchableOpacity>
+                        
+                        {/* BOTÃO SINTONIA (QUIZ) MANTIDO */}
+                        <TouchableOpacity style={styles.btnSecondary} onPress={onOpenQuiz}>
+                            <Sparkles size={18} color="#FFF" />
+                            <Text style={styles.btnText}>{t('harmony')}</Text>
+                        </TouchableOpacity>
                     </>
                 ) : (
                     <>
@@ -177,13 +207,11 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
     const { t } = useTranslation();
     const { user: loggedInUser } = useAuth();
     
-    // --- MUDANÇA: 'following' agora é o padrão (Primeira Aba) ---
     const [activeTab, setActiveTab] = React.useState<'following' | 'followers'>('following');
     
     const { data: followers } = useGetFollowers(userId);
     const { data: following } = useGetFollowing(userId);
     
-    // Lista correta baseada na aba
     const list = activeTab === 'followers' ? followers : following;
     
     const countFollowers = followers?.length || 0;
@@ -198,7 +226,6 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
         <View style={styles.card}>
             <Text style={styles.cardTitle}>{t('orbit_connections')}</Text>
             <View style={styles.tabsRow}>
-                {/* --- MUDANÇA: Inverti a ordem. Seguindo vem primeiro. --- */}
                 <TouchableOpacity style={[styles.tabItem, activeTab === 'following' && styles.activeTab]} onPress={() => setActiveTab('following')}><Text style={[styles.tabText, activeTab === 'following' && styles.activeTabText]}>{t('following')} ({countFollowing})</Text></TouchableOpacity>
                 <TouchableOpacity style={[styles.tabItem, activeTab === 'followers' && styles.activeTab]} onPress={() => setActiveTab('followers')}><Text style={[styles.tabText, activeTab === 'followers' && styles.activeTabText]}>{t('followers')} ({countFollowers})</Text></TouchableOpacity>
             </View>
@@ -359,8 +386,19 @@ export default function ProfileScreen() {
       {!isOwner && <View style={{height: 10}} />}
       <ScrollView contentContainerStyle={styles.scroll}>
         
-        <IdentityCard profile={profileData} isOwner={isOwner} onEdit={handleEdit} onOpenQuiz={() => setIsQuizOpen(true)} myId={loggedInUser?.id} onLogout={handleLogout} onMessagePress={() => setMessageModalOpen(true)} />
+        <IdentityCard 
+            profile={profileData} 
+            isOwner={isOwner} 
+            onEdit={handleEdit} 
+            onOpenQuiz={() => setIsQuizOpen(true)} // Botão Sintonia (Topo)
+            myId={loggedInUser?.id} 
+            onLogout={handleLogout} 
+            onMessagePress={() => setMessageModalOpen(true)} 
+        />
         {profileData.behavioralAnswers && profileData.behavioralAnswers.length > 0 && ( <BehavioralRadarChart answers={profileData.behavioralAnswers} sign={sunSign} userId={profileData.userId} isOwner={isOwner} /> )}
+        
+        {/* --- BOTÃO REMOVIDO! AQUI NÃO TEM MAIS NADA ENTRE O GRÁFICO E O SOBRE MIM --- */}
+
         {profileData.bio && <AboutCard bio={profileData.bio} />}
         
         <CosmicDetailsCard 
@@ -407,6 +445,7 @@ const styles = StyleSheet.create({
   locationText: { color: '#9CA3AF', fontSize: 14 },
   buttonRow: { flexDirection: 'row', gap: 10, marginTop: 15 },
   btnPrimary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#4F46E5', paddingVertical: 10, borderRadius: 8 },
+  btnPurpleFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#A855F7', padding: 12, borderRadius: 8, width: '100%' },
   btnPrimaryFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#4F46E5', paddingVertical: 12, borderRadius: 8, width: '100%', marginTop: 20 },
   btnOutlined: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#4B5563' },
   btnSecondary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#9333EA', paddingVertical: 10, borderRadius: 8 },
@@ -432,7 +471,6 @@ const styles = StyleSheet.create({
   astroCol: { alignItems: 'center' },
   astroLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 4 },
   astroVal: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
-  btnPurpleFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#6366F1', padding: 12, borderRadius: 8 },
   btnDisabled: { backgroundColor: '#374151' },
   btnLocked: { backgroundColor: '#374151' },
   bioText: { color: '#D1D5DB', lineHeight: 20 },

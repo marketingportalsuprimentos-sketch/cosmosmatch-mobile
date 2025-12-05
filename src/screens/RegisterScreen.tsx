@@ -1,3 +1,4 @@
+// mobile/src/screens/RegisterScreen.tsx
 import React from 'react';
 import { 
   View, 
@@ -9,7 +10,8 @@ import {
   Platform, 
   ScrollView,
   Alert,
-  TextInput
+  TextInput,
+  Linking // <--- IMPORTANTE: Adicionado para abrir links
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -38,9 +40,6 @@ export const RegisterScreen = () => {
       const response = await api.post<AuthResponse>('/auth/register', payload);
       const { accessToken, user } = response.data;
       
-      // Salva token e usuário
-      // O App.tsx vai detectar a mudança de usuário e
-      // automaticamente mostrar a tela 'PleaseVerify' se o email não estiver verificado.
       await storage.setToken(accessToken);
       setUser(user);
       
@@ -49,6 +48,10 @@ export const RegisterScreen = () => {
       Alert.alert(t('error'), msg);
     }
   };
+
+  // --- FUNÇÕES PARA ABRIR OS LINKS ---
+  const openTerms = () => Linking.openURL('https://cosmosmatch-frontend.vercel.app/terms');
+  const openPrivacy = () => Linking.openURL('https://cosmosmatch-frontend.vercel.app/privacy');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -166,6 +169,20 @@ export const RegisterScreen = () => {
               {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>}
             </View>
 
+            {/* --- NOVO: AVISO LEGAL (Acima do botão) --- */}
+            <View style={styles.legalContainer}>
+              <Text style={styles.legalText}>
+                Ao se cadastrar, você concorda com nossos{' '}
+                <Text style={styles.legalLink} onPress={openTerms}>
+                  Termos de Uso
+                </Text>
+                {' '}e{' '}
+                <Text style={styles.legalLink} onPress={openPrivacy}>
+                  Política de Privacidade
+                </Text>.
+              </Text>
+            </View>
+
             {/* BOTÃO */}
             <TouchableOpacity 
               style={[styles.submitButton, isSubmitting && styles.buttonDisabled]}
@@ -251,6 +268,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#F87171', 
   },
+  // ESTILOS DO TEXTO LEGAL
+  legalContainer: {
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  legalText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  legalLink: {
+    color: '#818CF8',
+    fontWeight: '600',
+  },
   submitButton: {
     width: '100%',
     justifyContent: 'center',
@@ -258,7 +290,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#6366F1', 
     paddingVertical: 10,
-    marginTop: 10,
+    marginTop: 0, // Ajustado pois agora tem o texto acima
   },
   buttonDisabled: {
     opacity: 0.5,

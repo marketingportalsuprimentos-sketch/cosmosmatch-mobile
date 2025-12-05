@@ -63,15 +63,12 @@ export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedC
       swipeDirection={['down']} 
       style={styles.modal} 
       propagateSwipe={true}
-      // --- NOVO AJUSTE ---
-      // Android: True (O Modal sobe sozinho)
-      // iOS: False (O KeyboardAvoidingView cuida disso)
-      avoidKeyboard={Platform.OS === 'android'} 
+      avoidKeyboard={false} // Mantemos false para controlar manualmente abaixo
     >
       <KeyboardAvoidingView 
-        // Android: Undefined (Desligado, pois o Modal já subiu)
-        // iOS: Padding (Padrão)
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        // CORREÇÃO: No Android, 'height' funciona melhor dentro de Modais,
+        // redimensionando a view para caber no espaço disponível acima do teclado.
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={styles.container} 
         keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >

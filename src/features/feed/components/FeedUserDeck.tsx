@@ -25,11 +25,11 @@ interface FeedUserDeckProps {
   onDeckFinished: () => void; 
   onLikePost: (postId: string) => void;
   onOpenComments: (postId: string, authorId: string) => void;
-  onSharePost: (postId: string) => void;
+  // ATUALIZADO: Share agora aceita imagem e nome
+  onSharePost: (postId: string, imageUrl: string, authorName: string) => void;
   onNavigateToProfile: (userId: string) => void;
   onFollowAuthor: (userId: string) => void;
   onDeletePost?: (postId: string) => void; 
-  // --- NOVO: Aceita altura customizada ---
   customHeight?: number;
 }
 
@@ -37,14 +37,13 @@ export function FeedUserDeck({
   authorId, authorName, authorAvatar, posts, isDeckActive, paused,
   onDeckFinished, onLikePost, onOpenComments, onSharePost,
   onNavigateToProfile, onFollowAuthor, onDeletePost,
-  customHeight // Recebe a altura calculada
+  customHeight 
 }: FeedUserDeckProps) {
   
   const { user } = useAuth(); 
   const { t } = useTranslation();
   const isOwner = user?.id === authorId; 
 
-  // Usa a altura customizada se vier, senão usa o padrão
   const effectiveHeight = customHeight || POST_HEIGHT;
 
   const { data: followingList } = useGetFollowing(user?.id);
@@ -116,7 +115,6 @@ export function FeedUserDeck({
     const isActive = isDeckActive && index === currentIndex && !paused;
 
     return (
-      // Aplica a altura dinâmica aqui
       <View style={[styles.postContainer, { height: effectiveHeight }]}>
         {item.mediaType === MediaType.VIDEO ? (
             <Video
@@ -163,7 +161,8 @@ export function FeedUserDeck({
                <Text style={styles.actionLabel}>{item.commentsCount}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionButton} onPress={() => onSharePost(item.id)}>
+            {/* ATUALIZADO: Passa URL da imagem e Nome do Autor para o Share */}
+            <TouchableOpacity style={styles.actionButton} onPress={() => onSharePost(item.id, item.imageUrl, authorName)}>
                <Ionicons name="share-outline" size={32} color="white" />
                <Text style={styles.actionLabel}>{t('send')}</Text> 
             </TouchableOpacity>
@@ -177,7 +176,6 @@ export function FeedUserDeck({
   };
 
   return (
-    // Aplica a altura dinâmica no container principal
     <View style={{ height: effectiveHeight, width: SCREEN_WIDTH, backgroundColor: 'black' }}>
       <View style={styles.progressContainer}>
          {posts.map((_, index) => {
@@ -190,8 +188,17 @@ export function FeedUserDeck({
          })}
       </View>
 
-      <TouchableOpacity style={styles.header} onPress={() => onNavigateToProfile(authorId)} activeOpacity={0.8}>
-         {authorAvatar ? <Image source={{ uri: authorAvatar }} style={styles.avatar} /> : <View style={[styles.avatar, {backgroundColor:'#333'}]} />}
+      {/* CLIQUE NA BIO: Header rebaixado e clicável */}
+      <TouchableOpacity 
+        style={styles.header} 
+        onPress={() => onNavigateToProfile(authorId)} 
+        activeOpacity={0.7}
+      >
+         {authorAvatar ? (
+            <Image source={{ uri: authorAvatar }} style={styles.avatar} />
+         ) : (
+            <View style={[styles.avatar, {backgroundColor:'#333'}]} />
+         )}
          <Text style={styles.authorName}>@{authorName}</Text>
          <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
       </TouchableOpacity>
@@ -211,7 +218,6 @@ export function FeedUserDeck({
 }
 
 const styles = StyleSheet.create({
-  // Height aqui é fallback, será sobrescrito pelo style inline
   postContainer: { width: SCREEN_WIDTH, height: POST_HEIGHT, justifyContent: 'center', backgroundColor: 'black' },
   fullImage: { width: '100%', height: '100%' },
   bottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '40%' },
@@ -220,6 +226,7 @@ const styles = StyleSheet.create({
   progressBarBg: { flex: 1, height: '100%', backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2 },
   progressBarFill: { height: '100%', backgroundColor: 'white', borderRadius: 2 },
 
+  // CORREÇÃO: "top: 85" para garantir visibilidade e clique abaixo do Widget
   header: { position: 'absolute', top: 85, left: 15, zIndex: 30, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', padding: 6, borderRadius: 20 },
   avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: 'white', marginRight: 10 },
   authorName: { color: 'white', fontWeight: 'bold', fontSize: 18, textShadowColor: 'black', textShadowRadius: 3, marginRight: 4 },

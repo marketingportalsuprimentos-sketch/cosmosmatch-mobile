@@ -123,7 +123,7 @@ const resources = {
       delete_post_title: 'Apagar Publicação',
       delete_post_confirm: 'Tem a certeza?',
       delete: 'Apagar',
-      share_message_default: 'Veja este post!',
+      share_message_default: 'Compartilhar Card',
       error_loading_feed: 'Erro ao carregar feed.',
       no_posts_found: 'Nenhuma publicação encontrada.',
       unknown_user: 'Desconhecido',
@@ -220,6 +220,7 @@ const resources = {
       open_gallery: 'Abrir Galeria',
       profile_not_found: 'Perfil não encontrado',
       uploading_photo: 'Enviando foto...',
+      share_card_button: 'Compartilhar Card',
       
       // Edição
       edit_profile_title: 'Editar Perfil',
@@ -282,9 +283,9 @@ const resources = {
       unblock: 'Desbloquear',
       no_blocked_users: 'Você não bloqueou ninguém.',
 
-      // Erros de Pagamento (Premium)
+           // Erros de Pagamento (Premium)
       premium_error_title: 'Atenção: Assinatura não criada',
-      premium_error_cpf_msg: 'O sistema de pagamento recusou os seus dados.\n\nIsso geralmente acontece quando o CPF/CNPJ informado        no perfil está incorreto ou inválido.\n\nPor favor, vá em "Editar Perfil" e verifique o seu documento.',
+      premium_error_cpf_msg: 'O sistema de pagamento recusou os seus dados.\n\nIsso geralmente acontece quando o CPF/CNPJ informado no perfil está incorreto ou inválido.\n\nPor favor, vá em "Editar Perfil" e verifique o seu documento.',
       premium_error_generic: 'Não foi possível conectar ao servidor de pagamento. Tente novamente mais tarde.',
       premium_btn_edit_profile: 'Ir para Editar Perfil',
 
@@ -297,6 +298,34 @@ const resources = {
       error_loading_map: 'Erro ao carregar mapa.',
       retry: 'Tentar Novamente',
       no_aspects: 'Nenhum aspecto.',
+      
+      // NOVOS TEXTOS PARA A MANDALA INTERATIVA (PLANETAS & SIGNOS)
+      chart_data_unavailable: 'Dados do mapa indisponíveis.',
+      at_degree: 'a',
+
+      planet_sun: 'Sol',
+      planet_moon: 'Lua',
+      planet_mercury: 'Mercúrio',
+      planet_venus: 'Vênus',
+      planet_mars: 'Marte',
+      planet_jupiter: 'Júpiter',
+      planet_saturn: 'Saturno',
+      planet_uranus: 'Urano',
+      planet_neptune: 'Netuno',
+      planet_pluto: 'Plutão',
+
+      sign_aries: 'Áries',
+      sign_taurus: 'Touro',
+      sign_gemini: 'Gêmeos',
+      sign_cancer: 'Câncer',
+      sign_leo: 'Leão',
+      sign_virgo: 'Virgem',
+      sign_libra: 'Libra',
+      sign_scorpio: 'Escorpião',
+      sign_sagittarius: 'Sagitário',
+      sign_capricorn: 'Capricórnio',
+      sign_aquarius: 'Aquário',
+      sign_pisces: 'Peixes',
       
       // TEXTOS COMPLETOS RESTAURADOS
       num_life_path_title: 'Caminho de Vida',

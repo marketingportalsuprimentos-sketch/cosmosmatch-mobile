@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, 
   ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Keyboard
@@ -32,6 +32,20 @@ export const ChatConversationScreen = () => {
   const { mutate: sendMessage, isPending: isSending } = useSendMessage();
   const { mutate: deleteMessage } = useDeleteMessage();
   const { mutate: hideMessage } = useHideMessageForMe();
+
+  // --- LÓGICA NOVA: Descobrir o ID do outro utilizador ---
+  const targetUserId = useMemo(() => {
+    if (!conversation || !user) return null;
+    const otherParticipant = conversation.participants.find((p: any) => p.userId !== user.id);
+    return otherParticipant?.userId;
+  }, [conversation, user]);
+
+  const handleOpenProfile = () => {
+    if (targetUserId) {
+        navigation.navigate('PublicProfile', { userId: targetUserId });
+    }
+  };
+  // -------------------------------------------------------
 
   const isPaywallActive = user?.subscription?.status === 'FREE' && (user?.subscription?.freeContactsUsed ?? 0) >= 3;
 
@@ -115,20 +129,27 @@ export const ChatConversationScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+        {/* HEADER AGORA CLICÁVEL */}
         <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                 <ArrowLeft size={24} color="#FFF" />
             </TouchableOpacity>
-            <Image source={{ uri: targetPhoto || 'https://via.placeholder.com/100' }} style={styles.avatar} />
-            <View style={styles.headerInfo}>
-                <Text style={styles.headerName}>{targetName || t('user_default')}</Text>
-            </View>
+            
+            {/* Botão que engloba Foto + Nome para ir ao Perfil */}
+            <TouchableOpacity 
+                style={styles.profileClickArea} 
+                onPress={handleOpenProfile}
+                activeOpacity={0.7}
+            >
+                <Image source={{ uri: targetPhoto || 'https://via.placeholder.com/100' }} style={styles.avatar} />
+                <View style={styles.headerInfo}>
+                    <Text style={styles.headerName}>{targetName || t('user_default')}</Text>
+                </View>
+            </TouchableOpacity>
         </View>
 
-        {/* ESTRUTURA CORRIGIDA: KAV Envolve Lista + Input */}
         <KeyboardAvoidingView 
             style={{ flex: 1 }}
-            // Android: 'height' para encolher a lista. iOS: 'padding'.
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
@@ -179,6 +200,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
   header: { flexDirection: 'row', alignItems: 'center', padding: 15, backgroundColor: '#111827', borderBottomWidth: 1, borderBottomColor: '#1F2937' },
   backButton: { marginRight: 15 },
+  // Novo estilo para a área clicável do perfil no header
+  profileClickArea: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
   headerInfo: { flex: 1 },
   headerName: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },

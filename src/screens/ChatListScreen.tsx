@@ -5,10 +5,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; 
 import { MessageCircle, Heart, Search, Trash2, Lock } from 'lucide-react-native';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { ptBR } from 'date-fns/locale'; // Obs: Datas relativas mantidas em PT ou EN global seria complexo, ok por hora.
+import { ptBR } from 'date-fns/locale'; 
 import { useFocusEffect } from '@react-navigation/native'; 
 import * as NavigationBar from 'expo-navigation-bar';
-import { useTranslation } from 'react-i18next'; // <--- I18N
+import { useTranslation } from 'react-i18next'; 
 
 import { useAuth } from '../contexts/AuthContext';
 import { useGetConversations } from '../features/chat/hooks/useChatQueries';
@@ -18,7 +18,7 @@ import { useHideConversation } from '../features/chat/hooks/useChatMutations';
 type Tab = 'messages' | 'likes';
 
 export const ChatListScreen = ({ navigation }: any) => {
-  const { t } = useTranslation(); // <--- HOOK
+  const { t } = useTranslation(); 
   const [activeTab, setActiveTab] = useState<Tab>('messages');
   const { user } = useAuth();
   const insets = useSafeAreaInsets(); 
@@ -35,10 +35,14 @@ export const ChatListScreen = ({ navigation }: any) => {
       const enableImmersiveMode = async () => {
         if (Platform.OS === 'android') {
           try {
+            // CORREÇÃO: O modo Edge-to-Edge já gerencia isso. 
+            // Forçar essas configs gera warnings no Android moderno.
             await NavigationBar.setVisibilityAsync('hidden');
-            await NavigationBar.setBehaviorAsync('overlay-swipe');
-            await NavigationBar.setBackgroundColorAsync('#00000000'); 
-          } catch (e) {}
+            // await NavigationBar.setBehaviorAsync('overlay-swipe'); 
+            // await NavigationBar.setBackgroundColorAsync('#00000000'); 
+          } catch (e) {
+            // Ignora erros de permissão ou suporte
+          }
         }
       };
       enableImmersiveMode();
@@ -76,33 +80,58 @@ export const ChatListScreen = ({ navigation }: any) => {
     const isLastMsgFromOther = lastMsg?.senderId !== user?.id;
     const showAsBlocked = isPaywallActive && isLastMsgFromOther;
 
+    // Função auxiliar para ir ao chat
+    const goToChat = () => {
+        navigation.navigate('ChatConversation', { 
+            chatId: item.id, 
+            targetName: otherParticipant.user.name, 
+            targetPhoto: otherParticipant.user.profile?.imageUrl 
+        });
+    };
+
+    // Função auxiliar para ir ao perfil
+    const goToProfile = () => {
+        navigation.navigate('PublicProfile', { userId: otherParticipant.userId });
+    };
+
     return (
       <View style={styles.card}>
-        <TouchableOpacity 
-            style={styles.cardContent}
-            onPress={() => navigation.navigate('ChatConversation', { 
-                chatId: item.id, targetName: otherParticipant.user.name, targetPhoto: otherParticipant.user.profile?.imageUrl 
-            })}
-        >
-            <View style={styles.avatarContainer}>
+        <View style={styles.cardContent}>
+            
+            {/* 1. CLIQUE NO AVATAR -> VAI PARA PERFIL */}
+            <TouchableOpacity onPress={goToProfile} style={styles.avatarContainer}>
                 <Image source={{ uri: otherParticipant.user.profile?.imageUrl || 'https://via.placeholder.com/150' }} style={styles.avatar} />
                 {!showAsBlocked && <View style={styles.onlineIndicator} />}
-            </View>
-            <View style={styles.textContainer}>
+            </TouchableOpacity>
+
+            {/* 2. RESTO DA CAIXA -> VAI PARA O CHAT */}
+            <TouchableOpacity 
+                style={styles.textContainer} 
+                onPress={goToChat}
+                activeOpacity={0.7}
+            >
                 <View style={styles.topRow}>
-                    <Text style={styles.name} numberOfLines={1}>{otherParticipant.user.name}</Text>
+                    {/* 3. CLIQUE NO NOME -> VAI PARA PERFIL */}
+                    <TouchableOpacity onPress={goToProfile} hitSlop={{top: 5, bottom: 5, right: 10, left: 0}}>
+                        <Text style={styles.name} numberOfLines={1}>{otherParticipant.user.name}</Text>
+                    </TouchableOpacity>
+                    
                     <Text style={styles.time}>{timeAgo}</Text>
                 </View>
+                
                 {showAsBlocked ? (
                     <View style={styles.blurRow}>
                         <Lock size={14} color="#A78BFA" />
                         <Text style={styles.blurText}>{t('message_hidden_premium')}</Text>
                     </View>
                 ) : (
-                    <Text style={styles.messagePreview} numberOfLines={1}>{lastMsg?.content || t('start_conversation')}</Text>
+                    <Text style={styles.messagePreview} numberOfLines={1}>
+                        {lastMsg?.content || t('start_conversation')}
+                    </Text>
                 )}
-            </View>
-        </TouchableOpacity>
+            </TouchableOpacity>
+        </View>
+
         <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteChat(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Trash2 size={20} color="#EF4444" />
         </TouchableOpacity>

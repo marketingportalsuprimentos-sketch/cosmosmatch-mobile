@@ -21,7 +21,6 @@ export function PostsScreen() {
   const insets = useSafeAreaInsets(); 
   const { t } = useTranslation();
   
-  // --- NOVO: Estado para guardar a altura exata da tela ---
   const [containerHeight, setContainerHeight] = useState(0);
 
   const { data, isLoading, isError, fetchNextPage, hasNextPage, refetch } = useGetFeed();
@@ -79,7 +78,16 @@ export function PostsScreen() {
     }
   };
 
-  const handleNavigateToProfile = (userId: string) => { navigation.navigate('PublicProfile', { userId }); };
+  // --- NAVEGAÇÃO CORRIGIDA ---
+  const handleNavigateToProfile = (userId: string) => {
+    if (!userId) return;
+    try {
+        navigation.navigate('PublicProfile', { userId });
+    } catch (error) {
+        console.log("Erro ao navegar para perfil:", error);
+    }
+  };
+  
   const handleFollow = (userId: string) => { follow(userId); };
   const handleLike = (postId: string, isLiked: boolean) => { if (isLiked) unlike(postId); else like(postId); };
 
@@ -95,10 +103,17 @@ export function PostsScreen() {
     setCommentSheet({ isOpen: true, postId, authorId });
   };
 
-  const handleShare = async (postId: string) => {
+  // --- SHARE CORRIGIDO ---
+  const handleShare = async (postId: string, imageUrl: string, authorName: string) => {
     try {
-      const url = `https://cosmosmatch.com/post/${postId}`;
-      await Share.share({ message: `${t('share_message_default')} 🌌\n${url}`, url: url, title: 'CosmosMatch' });
+      const appLink = "https://cosmosmatch.app";
+      const message = `Veja o post de ${authorName} no CosmosMatch! ✨\n\nVer mídia: ${imageUrl}\n\nBaixe o App: ${appLink}`;
+      
+      await Share.share({ 
+        message: message, 
+        url: imageUrl, 
+        title: 'CosmosMatch' 
+      });
     } catch (error) { }
   };
 
@@ -108,10 +123,8 @@ export function PostsScreen() {
   return (
     <View 
       style={styles.container}
-      // AQUI ESTÁ A MÁGICA: Medimos o tamanho real disponível
       onLayout={(event) => {
         const { height } = event.nativeEvent.layout;
-        // Só atualiza se mudou significativamente (evita loops)
         if (Math.abs(containerHeight - height) > 1) {
             setContainerHeight(height);
         }
@@ -119,21 +132,23 @@ export function PostsScreen() {
     >
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
-      <View style={[
-          styles.widgetOverlay, 
-          { top: Platform.OS === 'android' ? 40 : insets.top + 10 } 
-      ]}>
+      {/* CORREÇÃO: pointerEvents="box-none" permite clicar no perfil através da área transparente */}
+      <View 
+          pointerEvents="box-none"
+          style={[
+            styles.widgetOverlay, 
+            { top: Platform.OS === 'android' ? 40 : insets.top + 10 } 
+          ]}
+      >
          <PersonalDayCard />
       </View>
       
-      {/* Só renderiza a lista quando soubermos a altura exata */}
       {containerHeight > 0 && (
         <FlatList
             ref={verticalListRef}
             data={decks}
             keyExtractor={(item, index) => item.author?.id ? `${item.author.id}-${index}` : `deck-${index}`}
             renderItem={({ item, index }) => (
-            // Forçamos o container do item a ter EXATAMENTE a altura da tela medida
             <View style={{ height: containerHeight, width: '100%' }}>
                 <FeedUserDeck 
                     authorId={item.author?.id}
@@ -152,13 +167,11 @@ export function PostsScreen() {
                     onNavigateToProfile={handleNavigateToProfile}
                     onFollowAuthor={handleFollow}
                     onDeletePost={handleDeletePost} 
-                    // Passamos a altura para o componente interno também, se ele precisar
                     customHeight={containerHeight}
                 />
             </View>
             )}
             pagingEnabled
-            // O pulo agora é milimétrico
             snapToInterval={containerHeight}
             snapToAlignment="start"
             decelerationRate="fast"

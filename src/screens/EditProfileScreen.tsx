@@ -14,7 +14,11 @@ import { useGetMyProfile, useUpdateProfile, useUpdateAvatar } from '../features/
 import { UpdateProfileDto } from '../types/profile.types';
 import { CityAutocomplete } from '../components/ui/CityAutocomplete';
 
-LogBox.ignoreLogs(['VirtualizedLists should never be nested']);
+// --- SILENCIADOR DE ERROS VISUAIS ---
+LogBox.ignoreLogs([
+  'VirtualizedLists should never be nested',
+  'Encountered two children with the same key'
+]);
 
 export const EditProfileScreen = () => {
   const navigation = useNavigation<any>();
@@ -31,6 +35,9 @@ export const EditProfileScreen = () => {
   const { mutateAsync: updateProfile, isPending: isSavingProfile } = useUpdateProfile(); 
   const { mutateAsync: updateAvatar, isPending: isSavingAvatar } = useUpdateAvatar(); 
 
+  // Visualização do Nome (Travado para evitar erro 400 do backend)
+  const [name, setName] = useState('');
+  
   const [birthDate, setBirthDate] = useState(new Date());
   const [birthCity, setBirthCity] = useState('');
   const [birthTime, setBirthTime] = useState(new Date());
@@ -49,6 +56,9 @@ export const EditProfileScreen = () => {
 
   useEffect(() => {
     if (profile) {
+      // @ts-ignore
+      setName(profile.name || profile.user?.name || '');
+
       if (profile.birthDate) setBirthDate(new Date(profile.birthDate));
       
       if (profile.birthTime) {
@@ -68,19 +78,68 @@ export const EditProfileScreen = () => {
     }
   }, [profile]);
 
-  const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+  // --- NOVA LÓGICA DE MÍDIA (CÂMERA + GALERIA) ---
+  const requestCamera = async () => {
+    try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert(t('permission_needed'), t('camera_permission'));
+            return;
+        }
 
-    if (!result.canceled) {
-      setAvatarUri(result.assets[0].uri);
-      setIsAvatarChanged(true);
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1], // Quadrado perfeito para perfil
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            setAvatarUri(result.assets[0].uri);
+            setIsAvatarChanged(true);
+        }
+    } catch (error) {
+        Alert.alert(t('error'), t('error_camera'));
     }
   };
+
+  const requestGallery = async () => {
+    try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert(t('permission_needed'), t('gallery_permission'));
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            setAvatarUri(result.assets[0].uri);
+            setIsAvatarChanged(true);
+        }
+    } catch (error) {
+        Alert.alert(t('error'), t('error_gallery'));
+    }
+  };
+
+  // Função que abre o menu de escolha
+  const handleMediaOptions = () => {
+    Alert.alert(
+        t('add_photo_title'), // "Adicionar Foto"
+        t('add_photo_msg'),   // "Escolha a origem da foto"
+        [
+            { text: t('cancel'), style: 'cancel' },
+            { text: t('take_photo'), onPress: requestCamera },   // "Tirar Foto"
+            { text: t('open_gallery'), onPress: requestGallery } // "Abrir Galeria"
+        ]
+    );
+  };
+  // ------------------------------------------------
 
   const handleSubmit = async () => {
     try {
@@ -90,13 +149,13 @@ export const EditProfileScreen = () => {
             return;
         }
 
-        // === VALIDAÇÃO 2: Foto Obrigatória (NOVO) ===
-        // Se avatarUri for nulo ou vazio, bloqueia.
+        // === VALIDAÇÃO 2: Foto Obrigatória ===
         if (!avatarUri) {
             Alert.alert(t('required_fields_title'), "A foto de perfil é obrigatória para continuar.");
             return;
         }
 
+        // PACOTE DE DADOS (Sem 'name' para evitar erro 400)
         const payload: UpdateProfileDto = {
             birthDate: birthDate.toISOString(),
             birthTime: `${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`,
@@ -120,9 +179,14 @@ export const EditProfileScreen = () => {
           routes: [{ name: 'MainTabs' }],
         });
         
-    } catch (error) {
+    } catch (error: any) {
         console.error("Erro ao salvar perfil:", error);
-        Alert.alert(t('error'), t('unknown_error'));
+        const backendMessage = error.response?.data?.message;
+        let finalMessage = t('unknown_error');
+        if (backendMessage) {
+            finalMessage = Array.isArray(backendMessage) ? backendMessage.join('\n') : backendMessage;
+        }
+        Alert.alert(t('error'), finalMessage);
     }
   };
 
@@ -216,11 +280,13 @@ export const EditProfileScreen = () => {
             <View style={styles.avatarSection}>
                 <View style={styles.avatarWrapper}>
                     <Image source={{ uri: avatarUri || 'https://via.placeholder.com/150' }} style={styles.avatar} />
-                    <TouchableOpacity style={styles.cameraBtn} onPress={handlePickImage} disabled={isSaving}>
+                    {/* Agora chamamos handleMediaOptions em vez de abrir direto */}
+                    <TouchableOpacity style={styles.cameraBtn} onPress={handleMediaOptions} disabled={isSaving}>
                         <Camera size={20} color="#FFF" />
                     </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={handlePickImage} disabled={isSaving}>
+                {/* Agora chamamos handleMediaOptions em vez de abrir direto */}
+                <TouchableOpacity onPress={handleMediaOptions} disabled={isSaving}>
                     <Text style={styles.changePhotoText}>
                         {isSavingAvatar ? t('uploading_photo') : t('change_photo')}
                     </Text>
@@ -229,6 +295,23 @@ export const EditProfileScreen = () => {
 
             <View style={styles.form}>
                 
+                {/* Visualização do Nome (Read-only) */}
+                <View style={[styles.inputGroup, {opacity: 0.7}]}>
+                    <View style={styles.labelRow}>
+                        <Text style={styles.label}>{t('name_placeholder')}</Text>
+                        <TouchableOpacity onPress={() => showInfo('Nome de Exibição', 'Este campo não pode ser alterado aqui.')}>
+                            <Lock size={14} color="#9CA3AF" style={{marginLeft: 6}} />
+                        </TouchableOpacity>
+                    </View>
+                    <TextInput 
+                        style={[styles.input, {backgroundColor: '#374151', color: '#9CA3AF'}]} 
+                        value={name} 
+                        editable={false} 
+                        placeholder="Seu nome público"
+                        placeholderTextColor="#6B7280"
+                    />
+                </View>
+
                 <View style={[styles.row, { zIndex: 1 }]}>
                     <View style={styles.col}>
                         <Text style={styles.label}>{t('birth_date_label')}</Text>
