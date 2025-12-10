@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
-import { Keyboard } from 'react-native'; 
+import { Keyboard, Platform } from 'react-native'; 
 import * as profileApi from '../services/profileApi'; 
 import { chatApi } from '../../chat/services/chatApi'; 
 import { api } from '../../../services/api';
@@ -27,9 +27,14 @@ export const useGetPublicProfile = (userId?: string) => {
 export const useGetGalleryPhotos = (userId?: string) => {
   return useQuery({
     queryKey: ['galleryPhotos', userId],
-    queryFn: () => profileApi.getGalleryPhotos(userId!),
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5, 
+    queryFn: async () => {
+      const endpoint = userId 
+        ? `/profile/${userId}/gallery` 
+        : '/profile/gallery';
+      
+      const { data } = await api.get(endpoint);
+      return data;
+    },
   });
 };
 
@@ -65,12 +70,14 @@ export const useUpdateAvatar = () => {
   return useMutation({
     mutationFn: async (imageUri: string) => {
       const formData = new FormData();
-      const filename = imageUri.split('/').pop();
-      const match = /\.(\w+)$/.exec(filename || '');
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
+      const uriParts = imageUri.split('.');
+      const fileType = uriParts[uriParts.length - 1];
+      const mimeType = fileType === 'png' ? 'image/png' : 'image/jpeg';
+      
+      const uri = Platform.OS === 'android' ? imageUri : imageUri.replace('file://', '');
 
       // @ts-ignore
-      formData.append('file', { uri: imageUri, name: filename || 'avatar.png', type });
+      formData.append('file', { uri: uri, name: `avatar.${fileType}`, type: mimeType });
 
       const response = await api.post('/profile/avatar', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -94,12 +101,20 @@ export const useAddPhotoToGallery = () => {
   return useMutation({
     mutationFn: async (imageUri: string) => {
       const formData = new FormData();
-      const filename = imageUri.split('/').pop() || 'photo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
+      const uriParts = imageUri.split('.');
+      const fileType = uriParts[uriParts.length - 1];
+      
+      let mimeType = 'image/jpeg';
+      if (fileType && fileType.toLowerCase() === 'png') mimeType = 'image/png';
+
+      const uri = Platform.OS === 'android' ? imageUri : imageUri.replace('file://', '');
 
       // @ts-ignore
-      formData.append('file', { uri: imageUri, name: filename, type });
+      formData.append('file', { 
+        uri: uri, 
+        name: `photo.${fileType || 'jpg'}`, 
+        type: mimeType 
+      });
 
       const { data } = await api.post('/profile/gallery', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -108,6 +123,7 @@ export const useAddPhotoToGallery = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galleryPhotos'] });
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
       toast.success('Foto adicionada!');
     },
     onError: (error) => {
@@ -123,6 +139,7 @@ export const useDeletePhotoFromGallery = () => {
     mutationFn: profileApi.deletePhotoFromGallery,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['galleryPhotos'] });
+      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
       toast.success('Foto removida.');
     }
   });
@@ -182,7 +199,6 @@ export const useGetGalleryPhotoComments = (photoId: string) => {
   });
 };
 
-// --- COMENTÁRIO HÍBRIDO ---
 export const useCommentOnGalleryPhoto = (targetUserId?: string) => {
   const queryClient = useQueryClient();
   const navigation = useNavigation<any>(); 
@@ -228,6 +244,28 @@ export const useCommentOnGalleryPhoto = (targetUserId?: string) => {
         if (error?.response?.status === 402) {
             navigation.navigate('Premium');
         }
+    }
+  });
+};
+
+// --- NOVO: DELETE COMMENT ---
+export const useDeleteGalleryPhotoComment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (commentId: string) => {
+      // Endpoint padrão para deletar comentário
+      const { data } = await api.delete(`/profile/gallery/comments/${commentId}`);
+      return data;
+    },
+    onSuccess: () => {
+      // Atualiza a lista de comentários para sumir o item deletado
+      queryClient.invalidateQueries({ queryKey: ['galleryComments'] });
+      // Atualiza a contagem na lista de fotos
+      queryClient.invalidateQueries({ queryKey: ['galleryPhotos'] });
+      toast.success("Comentário apagado");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Erro ao apagar comentário");
     }
   });
 };
@@ -343,6 +381,3 @@ export const useMarkLikesAsRead = () => {
     }
   });
 };
-
-// --- REMOVIDA A LINHA DE EXPORT QUE CAUSAVA O ERRO ---
-// (A função useGetUnreadLikesCount já está exportada diretamente acima)

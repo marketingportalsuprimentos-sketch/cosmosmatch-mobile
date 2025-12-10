@@ -1,26 +1,28 @@
 import React, { useState } from 'react';
 import { 
-  View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard 
+  View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard, Alert 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal'; 
 import { useTranslation } from 'react-i18next';
-import { useGetPostComments, useCommentOnPost } from '../hooks/useFeed';
+import { useGetPostComments, useCommentOnPost, useDeletePostComment } from '../hooks/useFeed';
 import { useAuth } from '../../../contexts/AuthContext';
 
 interface FeedCommentSheetProps {
   isVisible: boolean;
   onClose: () => void;
   postId: string;
-  authorId: string;
+  authorId: string; // ID do dono do post
 }
 
 export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedCommentSheetProps) {
   const { t } = useTranslation();
   const [commentText, setCommentText] = useState('');
+  const { user: loggedInUser } = useAuth(); // Quem está logado
   
   const { data: comments, isLoading } = useGetPostComments(postId);
   const { mutate: postComment, isPending } = useCommentOnPost();
+  const { mutate: deleteComment, isPending: isDeleting } = useDeletePostComment();
 
   const handleSend = () => {
     if (!commentText.trim()) return;
@@ -31,7 +33,7 @@ export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedC
         onSuccess: () => { 
           setCommentText(''); 
           Keyboard.dismiss();
-          onClose(); 
+          onClose(); // ATIVADO: Fecha a janela automaticamente após enviar
         },
         onError: (error: any) => { 
             if (error?.response?.status === 402) { 
@@ -43,17 +45,54 @@ export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedC
     );
   };
 
-  const renderComment = ({ item }: any) => (
-    <View style={styles.commentItem}>
-       {item.user?.profile?.imageUrl ? (
-         <Image source={{ uri: item.user.profile.imageUrl }} style={styles.avatar} />
-       ) : ( <View style={[styles.avatar, styles.placeholderAvatar]} /> )}
-       <View style={styles.commentBubble}>
-          <Text style={styles.commentAuthor}>{item.user?.name || t('user_default')}</Text>
-          <Text style={styles.commentText}>{item.content}</Text>
-       </View>
-    </View>
-  );
+  const handleDelete = (commentId: string) => {
+      Alert.alert(
+          t('delete_comment_title', 'Apagar comentário?'),
+          t('delete_comment_confirm', 'Essa ação não tem volta.'),
+          [
+              { text: t('cancel'), style: 'cancel' },
+              { 
+                  text: t('delete'), 
+                  style: 'destructive', 
+                  onPress: () => deleteComment(commentId) 
+              }
+          ]
+      );
+  };
+
+  const renderComment = ({ item }: any) => {
+    // --- LÓGICA DE PERMISSÃO ---
+    // Sou dono do post?
+    const isPostOwner = loggedInUser?.id === authorId;
+    // Sou dono do comentário?
+    const isCommentAuthor = loggedInUser?.id === item.userId;
+    
+    const canDelete = isPostOwner || isCommentAuthor;
+
+    return (
+      <View style={styles.commentItem}>
+         {item.user?.profile?.imageUrl ? (
+           <Image source={{ uri: item.user.profile.imageUrl }} style={styles.avatar} />
+         ) : ( <View style={[styles.avatar, styles.placeholderAvatar]} /> )}
+         
+         <View style={styles.commentBubble}>
+            <Text style={styles.commentAuthor}>{item.user?.name || t('user_default')}</Text>
+            <Text style={styles.commentText}>{item.content}</Text>
+         </View>
+
+         {/* LIXEIRA */}
+         {canDelete && (
+             <TouchableOpacity 
+                onPress={() => handleDelete(item.id)} 
+                style={styles.deleteBtn}
+                disabled={isDeleting}
+             >
+                 <Ionicons name="trash-outline" size={18} color="#EF4444" />
+             </TouchableOpacity>
+         )}
+      </View>
+    );
+  };
 
   return (
     <Modal 
@@ -63,11 +102,9 @@ export function FeedCommentSheet({ isVisible, onClose, postId, authorId }: FeedC
       swipeDirection={['down']} 
       style={styles.modal} 
       propagateSwipe={true}
-      avoidKeyboard={false} // Mantemos false para controlar manualmente abaixo
+      avoidKeyboard={false} 
     >
       <KeyboardAvoidingView 
-        // CORREÇÃO: No Android, 'height' funciona melhor dentro de Modais,
-        // redimensionando a view para caber no espaço disponível acima do teclado.
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={styles.container} 
         keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
@@ -121,7 +158,7 @@ const styles = StyleSheet.create({
   closeBtn: { position: 'absolute', right: 15, top: 15 },
   listContainer: { flex: 1, backgroundColor: '#0f131f' }, 
   emptyText: { color: '#6B7280', textAlign: 'center', marginTop: 40, fontStyle: 'italic' },
-  commentItem: { flexDirection: 'row', marginBottom: 16 },
+  commentItem: { flexDirection: 'row', marginBottom: 16, alignItems: 'center' },
   avatar: { width: 36, height: 36, borderRadius: 18, marginRight: 10 },
   placeholderAvatar: { backgroundColor: '#374151' },
   commentBubble: { flex: 1 },
@@ -136,5 +173,6 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, backgroundColor: '#1F2937', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, color: 'white', maxHeight: 100, borderWidth: 1, borderColor: '#374151' },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#8B5CF6', justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
-  disabledBtn: { backgroundColor: '#4B5563' }
+  disabledBtn: { backgroundColor: '#4B5563' },
+  deleteBtn: { padding: 8, marginLeft: 4 }
 });

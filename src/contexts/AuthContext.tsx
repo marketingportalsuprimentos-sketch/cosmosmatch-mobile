@@ -1,3 +1,5 @@
+// mobile/src/contexts/AuthContext.tsx
+
 import React, {
   createContext,
   useContext,
@@ -16,12 +18,11 @@ import { storage } from '../lib/storage';
 import { ENV } from '../config/env';
 import { View, ActivityIndicator } from 'react-native';
 
-// 1. ATUALIZAÇÃO NA INTERFACE: Adicionado signIn
 export interface AuthContextType {
   user: AuthUser | null;
   setUser: Dispatch<SetStateAction<AuthUser | null>>;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>; // <--- NOVO
+  signIn: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   signOut: () => Promise<void>; 
   incrementFreeContactsUsed: () => void;
@@ -116,25 +117,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user, socket]);
 
-  // --- 3. FUNÇÃO DE LOGIN (A PEÇA QUE FALTAVA) ---
+  // --- 3. LOGIN (COM LIMPEZA PREVENTIVA) ---
   const signIn = useCallback(async (email, password) => {
-    // Faz a requisição ao backend
+    // Segurança Extra: Garante que o cache está vazio antes de logar novo usuário
+    queryClient.clear();
+    queryClient.removeQueries();
+
     const response = await api.post('/auth/login', { email, password });
     const { accessToken, user } = response.data;
 
-    // Salva o token no celular
     await storage.setToken(accessToken);
-    
-    // Atualiza o estado do usuário (Isso faz o App.tsx trocar a tela de Login pela Home)
     setUserState(user);
-  }, []);
-
-  const logout = useCallback(async () => {
-    console.log('Auth: Logout...');
-    await storage.removeToken();
-    setUserState(null);
-    queryClient.clear();
   }, [queryClient]);
+
+  // --- 4. LOGOUT (LIMPEZA AGRESSIVA) ---
+  const logout = useCallback(async () => {
+    console.log('Auth: Logout... Faxina no Cache.');
+    
+    // 1. Apaga Token
+    await storage.removeToken();
+    
+    // 2. Mata o Socket manualmente
+    if (socket && socket.connected) {
+        socket.disconnect();
+    }
+    setSocket(null);
+
+    // 3. LIMPEZA TOTAL DO REACT QUERY (AQUI ESTÁ A CORREÇÃO)
+    // clear() reseta o estado interno
+    queryClient.clear();
+    // removeQueries() força a remoção de todos os dados cacheados (Feed, Perfil, etc)
+    queryClient.removeQueries();
+
+    // 4. Tira o usuário (Navega para Login)
+    setUserState(null);
+  }, [queryClient, socket]);
 
   const setUser = useCallback(
     (action: SetStateAction<AuthUser | null>) => {
@@ -142,7 +159,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserState(action);
         } else {
             setUserState(action);
-            if (action) queryClient.clear();
+            // Se for logout via setUser(null), também limpa
+            if (!action) {
+                queryClient.clear();
+                queryClient.removeQueries();
+            }
         }
     },
     [queryClient],
@@ -167,7 +188,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     setUser,
     isLoading,
-    signIn, // <--- Agora a função está disponível para as telas usarem!
+    signIn, 
     logout,
     signOut: logout, 
     incrementFreeContactsUsed,

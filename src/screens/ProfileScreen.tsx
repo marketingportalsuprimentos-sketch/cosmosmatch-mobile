@@ -1,7 +1,7 @@
 // mobile/src/screens/ProfileScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, Alert, Dimensions, Modal, TouchableWithoutFeedback, TextInput, KeyboardAvoidingView, Platform, Keyboard, Linking 
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, Alert, Dimensions, Modal, TouchableWithoutFeedback, TextInput, KeyboardAvoidingView, Platform, Keyboard, Linking, RefreshControl 
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -144,7 +144,7 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
   );
 };
 
-// --- IDENTITY CARD (Mantido apenas o botão Sintonia/Quiz) ---
+// --- IDENTITY CARD ---
 const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress }: any) => {
     const navigation = useNavigation<any>();
     const { t } = useTranslation();
@@ -179,8 +179,6 @@ const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, on
                 {isOwner ? (
                     <>
                         <TouchableOpacity style={styles.btnPrimary} onPress={onEdit}><Settings size={18} color="#FFF" /><Text style={styles.btnText}>{t('edit')}</Text></TouchableOpacity>
-                        
-                        {/* BOTÃO SINTONIA (QUIZ) MANTIDO */}
                         <TouchableOpacity style={styles.btnSecondary} onPress={onOpenQuiz}>
                             <Sparkles size={18} color="#FFF" />
                             <Text style={styles.btnText}>{t('harmony')}</Text>
@@ -209,6 +207,7 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
     
     const [activeTab, setActiveTab] = React.useState<'following' | 'followers'>('following');
     
+    // Adicionamos refetch aqui também se quisesse, mas vamos focar no principal
     const { data: followers } = useGetFollowers(userId);
     const { data: following } = useGetFollowing(userId);
     
@@ -316,22 +315,61 @@ export default function ProfileScreen() {
   const route = useRoute();
   const { t } = useTranslation();
   const { user: loggedInUser, isLoading: authLoading, signOut } = useAuth();
+  
+  // --- Estados ---
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
-  
   const [isLockModalOpen, setLockModalOpen] = useState(false);
   const [isMessageModalOpen, setMessageModalOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false); // Estado para o Pull-to-Refresh
 
   const targetUserId = (route.params as any)?.userId || loggedInUser?.id;
   const isOwner = targetUserId === loggedInUser?.id;
 
-  const { data: profileData, isLoading: profileLoading } = isOwner ? useGetMyProfile() : useGetPublicProfile(targetUserId);
-  const { data: photosData } = useGetGalleryPhotos(targetUserId);
+  // --- Hooks de Dados ---
+  // Importante: Pegamos o `refetch` para poder atualizar a tela manualmente
+  const { 
+    data: profileData, 
+    isLoading: profileLoading, 
+    refetch: refetchProfile 
+  } = isOwner ? useGetMyProfile() : useGetPublicProfile(targetUserId);
+
+  const { 
+    data: photosData, 
+    refetch: refetchPhotos 
+  } = useGetGalleryPhotos(targetUserId);
+  
+  const { 
+    data: followers, 
+    refetch: refetchFollowers 
+  } = useGetFollowers(targetUserId);
+  
+  const { 
+    data: following, 
+    refetch: refetchFollowing 
+  } = useGetFollowing(targetUserId);
+
   const { mutate: addPhoto, isPending: isUploading } = useAddPhotoToGallery();
   const { mutate: sendMessage, isPending: isSendingMessage } = useCreateOrGetConversation();
-  
-  const { data: followers } = useGetFollowers(targetUserId);
-  const { data: following } = useGetFollowing(targetUserId);
+
+  // --- Função de Refresh (Arrastar para Baixo) ---
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+        // Atualiza tudo ao mesmo tempo
+        await Promise.all([
+            refetchProfile(),
+            refetchPhotos(),
+            refetchFollowers(),
+            refetchFollowing()
+        ]);
+        toast.success("Perfil atualizado");
+    } catch (error) {
+        console.error("Erro ao atualizar:", error);
+    } finally {
+        setRefreshing(false);
+    }
+  }, [refetchProfile, refetchPhotos, refetchFollowers, refetchFollowing]);
 
   const handleEdit = () => navigation.navigate('EditProfileScreen' as never);
   const handleLogout = () => { if (signOut) { signOut(); } else { Alert.alert(t('error'), t('error_logout')); } };
@@ -384,21 +422,30 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {!isOwner && <View style={{height: 10}} />}
-      <ScrollView contentContainerStyle={styles.scroll}>
-        
+      
+      {/* ScrollView com RefreshControl */}
+      <ScrollView 
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+            <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#A78BFA"
+                colors={["#A78BFA"]} // Android
+            />
+        }
+      >
         <IdentityCard 
             profile={profileData} 
             isOwner={isOwner} 
             onEdit={handleEdit} 
-            onOpenQuiz={() => setIsQuizOpen(true)} // Botão Sintonia (Topo)
+            onOpenQuiz={() => setIsQuizOpen(true)} 
             myId={loggedInUser?.id} 
             onLogout={handleLogout} 
             onMessagePress={() => setMessageModalOpen(true)} 
         />
         {profileData.behavioralAnswers && profileData.behavioralAnswers.length > 0 && ( <BehavioralRadarChart answers={profileData.behavioralAnswers} sign={sunSign} userId={profileData.userId} isOwner={isOwner} /> )}
         
-        {/* --- BOTÃO REMOVIDO! AQUI NÃO TEM MAIS NADA ENTRE O GRÁFICO E O SOBRE MIM --- */}
-
         {profileData.bio && <AboutCard bio={profileData.bio} />}
         
         <CosmicDetailsCard 

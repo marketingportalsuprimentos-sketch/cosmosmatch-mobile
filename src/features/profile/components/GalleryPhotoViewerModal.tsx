@@ -1,9 +1,9 @@
-// src/features/profile/components/GalleryPhotoViewerModal.tsx
+// mobile/src/features/profile/components/GalleryPhotoViewerModal.tsx
 
 import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { X, Heart, MessageCircle, Trash2 } from 'lucide-react-native';
-import { useIsFocused } from '@react-navigation/native'; // <--- IMPORTADO
+import { useIsFocused } from '@react-navigation/native';
 import { ProfilePhoto } from '../../../types/profile.types';
 import { useDeletePhotoFromGallery, useLikeGalleryPhoto, useUnlikeGalleryPhoto } from '../hooks/useProfile';
 import { GalleryCommentSheet } from './GalleryCommentSheet';
@@ -21,21 +21,17 @@ export const GalleryPhotoViewerModal = ({
     photo, onClose, isOwner, profileUserId 
 }: GalleryPhotoViewerModalProps) => {
   
-  // Detecta se a tela de perfil está ativa
   const isFocused = useIsFocused();
-  
   const [showComments, setShowComments] = useState(false);
 
   const { mutate: deletePhoto } = useDeletePhotoFromGallery();
   const { mutate: likePhoto } = useLikeGalleryPhoto(profileUserId);
   const { mutate: unlikePhoto } = useUnlikeGalleryPhoto(profileUserId);
 
-  // --- CORREÇÃO DE TRAVAMENTO ---
-  // Se a tela perder o foco (ex: navegou para Premium), fecha o modal da foto.
   useEffect(() => {
       if (!isFocused) {
-          setShowComments(false); // Fecha comentários
-          onClose(); // Fecha a foto
+          setShowComments(false);
+          onClose();
       }
   }, [isFocused]);
 
@@ -120,6 +116,7 @@ export const GalleryPhotoViewerModal = ({
                 isOpen={showComments}
                 onClose={() => setShowComments(false)}
                 targetUserId={profileUserId}
+                isPhotoOwner={isOwner} // <--- ADICIONADO AQUI
             />
         )}
 
@@ -132,10 +129,8 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'space-between' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, marginTop: 40 },
   title: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-  
   imageContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   image: { width: width, height: '80%' },
-
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 40 },
   actionsLeft: { flexDirection: 'row', gap: 24 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },

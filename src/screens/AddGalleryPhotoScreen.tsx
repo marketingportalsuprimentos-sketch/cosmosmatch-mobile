@@ -7,141 +7,103 @@ import {
     TouchableOpacity, 
     Image, 
     Alert, 
-    ActivityIndicator 
+    ActivityIndicator,
+    Modal
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { api } from '../services/api'; // Certifique-se que o seu axios `api` está importado
-import { useQueryClient } from '@tanstack/react-query'; // Para invalidar o cache
-
-// --- TIPOS E MOCKS (Substitua pelo seu hook real de mutation) ---
-
-// MOCK: Hook para Adicionar Foto (A SUA IMPLEMENTAÇÃO REAL)
-// Este mock simula o uso do `api` para enviar FormData no React Native.
-const useAddPhotoToGallery = () => {
-    const queryClient = useQueryClient();
-    const [isPending, setIsPending] = useState(false);
-    const [error, setError] = useState<Error | null>(null);
-
-    const mutate = async (fileUri: string, onSuccess: () => void, onError: (e: Error) => void) => {
-        setIsPending(true);
-        setError(null);
-
-        try {
-            // CRUCIAL: Construção do FormData para React Native
-            const formData = new FormData();
-            const uriParts = fileUri.split('.');
-            const fileType = uriParts[uriParts.length - 1];
-            const mimeType = fileType === 'jpg' ? 'image/jpeg' : `image/${fileType}`;
-
-            // O nome do campo no backend deve ser 'file' (conforme o seu Web App)
-            formData.append('file', {
-                uri: fileUri,
-                name: `photo.${fileType}`,
-                type: mimeType,
-            } as any); // 'as any' é necessário para a tipagem do FormData no RN
-
-            // A chamada real para a API
-            await api.post('/profile/gallery', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-
-            // Invalida o cache da galeria para o ecrã atualizar automaticamente
-            queryClient.invalidateQueries({ queryKey: ['galleryPhotos'] });
-            
-            onSuccess();
-        } catch (err: any) {
-            const errorMessage = err.response?.data?.message || err.message || 'Erro desconhecido ao carregar a foto.';
-            setError(new Error(errorMessage));
-            onError(new Error(errorMessage));
-        } finally {
-            setIsPending(false);
-        }
-    };
-
-    return { 
-        mutate: (fileUri: string, options: { onSuccess: () => void, onError: (e: Error) => void }) => {
-            mutate(fileUri, options.onSuccess, options.onError);
-        },
-        isPending, 
-        error
-    };
-};
-
-// --- COMPONENTE PRINCIPAL ---
+import { useAddGalleryPhoto } from '../hooks/useGalleryHooks'; // Importando do arquivo correto
 
 export const AddGalleryPhotoScreen = () => {
     const navigation = useNavigation();
-    const { mutate: addPhotoMutate, isPending, error: mutationError } = useAddPhotoToGallery();
+    
+    // Usando o hook real agora
+    const { mutate: addPhoto, isPending, error: mutationError } = useAddGalleryPhoto();
 
-    // No Mobile, usamos o URI do asset selecionado em vez do objeto File
     const [selectedUri, setSelectedUri] = useState<string | null>(null); 
-    const [error, setError] = useState<string | null>(null);
+    const [localError, setLocalError] = useState<string | null>(null);
+    const [showOptions, setShowOptions] = useState(false); // Modal para escolher camera ou galeria
 
-    // Lida com a permissão da galeria e a seleção da imagem
-    const handlePickImage = async () => {
-        // Pedir permissão
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    // Configuração OTIMIZADA para evitar Crash (Out of Memory)
+    const imagePickerOptions: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true, // Permite cortar quadrado
+        aspect: [1, 1],
+        quality: 0.5, // CRUCIAL: 0.5 reduz drasticamente o uso de RAM sem perder muita qualidade visual no celular
+    };
+
+    // Opção 1: Abrir Câmera
+    const handleCamera = async () => {
+        setShowOptions(false);
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert(
-                'Permissão Necessária',
-                'Precisamos da sua permissão para aceder à sua galeria de fotos.'
-            );
+            Alert.alert('Permissão', 'Precisamos de acesso à câmera.');
             return;
         }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false, // Pode adicionar corte depois, se necessário
-            aspect: [1, 1], // Fotos quadradas (opcional)
-            quality: 0.8,
-        });
+        try {
+            const result = await ImagePicker.launchCameraAsync(imagePickerOptions);
+            if (!result.canceled && result.assets?.[0]) {
+                setSelectedUri(result.assets[0].uri);
+                setLocalError(null);
+            }
+        } catch (e) {
+            Alert.alert('Erro', 'Não foi possível abrir a câmera.');
+        }
+    };
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            const asset = result.assets[0];
-            
-            // Validação de tamanho (Se necessário, como no seu Web App)
-            // No RN, o ImagePicker não dá o tamanho fácil. Terá de ser no backend.
-            
-            setSelectedUri(asset.uri);
-            setError(null);
+    // Opção 2: Abrir Galeria
+    const handleGallery = async () => {
+        setShowOptions(false);
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permissão', 'Precisamos de acesso à galeria.');
+            return;
+        }
+
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync(imagePickerOptions);
+            if (!result.canceled && result.assets?.[0]) {
+                setSelectedUri(result.assets[0].uri);
+                setLocalError(null);
+            }
+        } catch (e) {
+            Alert.alert('Erro', 'Não foi possível abrir a galeria.');
         }
     };
 
     const handleSubmit = () => {
         if (!selectedUri) {
-            setError('Por favor, selecione uma imagem para carregar.');
+            setLocalError('Por favor, tire uma foto ou selecione uma imagem.');
             return;
         }
 
-        addPhotoMutate(selectedUri, {
+        addPhoto(selectedUri, {
             onSuccess: () => {
                 Alert.alert('Sucesso!', 'Foto adicionada à galeria.');
-                // Navega de volta para o ecrã anterior (Perfil)
                 navigation.goBack(); 
             },
-            onError: (err) => {
-                // O hook trata do estado de erro, apenas exibimos um alerta
-                Alert.alert('Erro ao carregar', err.message);
+            onError: (err: any) => {
+                const msg = err.response?.data?.message || err.message || 'Erro ao enviar foto.';
+                setLocalError(msg);
             },
         });
     };
 
-    // Reseta o estado ao entrar no ecrã (se estiver a ser usado como modal/screen)
+    // Limpa estado ao focar
     useEffect(() => {
         const unsubscribe = navigation.addListener('focus', () => {
             setSelectedUri(null);
-            setError(null);
+            setLocalError(null);
         });
         return unsubscribe;
     }, [navigation]);
 
-
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Adicionar Foto à Galeria</Text>
+                <Text style={styles.title}>Nova Foto</Text>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
                     <Ionicons name="close" size={24} color="#D1D5DB" />
                 </TouchableOpacity>
@@ -152,29 +114,26 @@ export const AddGalleryPhotoScreen = () => {
                 {/* Área de Visualização e Seleção */}
                 <TouchableOpacity
                     style={styles.uploadArea}
-                    onPress={handlePickImage}
+                    onPress={() => setShowOptions(true)}
                     disabled={isPending}
                 >
                     {selectedUri ? (
                         <Image source={{ uri: selectedUri }} style={styles.imagePreview} />
                     ) : (
                         <View style={styles.placeholder}>
-                            <Ionicons name="image-outline" size={48} color="#A855F7" />
+                            <Ionicons name="camera" size={48} color="#A855F7" />
                             <Text style={styles.placeholderText}>
-                                Tocar para selecionar foto
-                            </Text>
-                            <Text style={styles.placeholderSubText}>
-                                (Formatos: JPG, PNG)
+                                Tocar para adicionar
                             </Text>
                         </View>
                     )}
                 </TouchableOpacity>
 
                 {/* Erros */}
-                {(error || mutationError) && (
+                {(localError || mutationError) && (
                     <View style={styles.errorBox}>
                         <Text style={styles.errorText}>
-                            {error || mutationError?.message}
+                            {localError || (mutationError as any)?.message}
                         </Text>
                     </View>
                 )}
@@ -182,47 +141,74 @@ export const AddGalleryPhotoScreen = () => {
                 {/* Botão de Envio */}
                 <TouchableOpacity
                     onPress={handleSubmit}
-                    disabled={!selectedUri || isPending || !!error}
+                    disabled={!selectedUri || isPending}
                     style={[
                         styles.submitButton, 
-                        (!selectedUri || isPending || !!error) && styles.disabledButton
+                        (!selectedUri || isPending) && styles.disabledButton
                     ]}
                 >
                     {isPending ? (
                         <ActivityIndicator size="small" color="#FFF" />
                     ) : (
                         <Text style={styles.submitButtonText}>
-                            Adicionar à Galeria
+                            Salvar na Galeria
                         </Text>
                     )}
                 </TouchableOpacity>
             </View>
+
+            {/* Modal de Seleção (Câmera ou Galeria) */}
+            <Modal
+                visible={showOptions}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowOptions(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.modalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setShowOptions(false)}
+                >
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Escolher origem</Text>
+                        
+                        <TouchableOpacity style={styles.modalOption} onPress={handleCamera}>
+                            <Ionicons name="camera-outline" size={24} color="#FFF" />
+                            <Text style={styles.modalOptionText}>Tirar Foto</Text>
+                        </TouchableOpacity>
+                        
+                        <View style={styles.separator} />
+
+                        <TouchableOpacity style={styles.modalOption} onPress={handleGallery}>
+                            <Ionicons name="images-outline" size={24} color="#FFF" />
+                            <Text style={styles.modalOptionText}>Abrir Galeria</Text>
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
+            </Modal>
         </View>
     );
 };
 
-
-// --- ESTILOS ---
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#111827', // Gray 900
+        backgroundColor: '#111827',
     },
     header: {
-        paddingTop: 50, // Espaço para a barra de status
+        paddingTop: 50,
         paddingHorizontal: 16,
         paddingBottom: 16,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: '#1F2937', // Gray 800
+        borderBottomColor: '#1F2937',
     },
     title: {
         fontSize: 18,
         fontWeight: 'bold',
         color: 'white',
-        textAlign: 'center',
     },
     closeButton: {
         position: 'absolute',
@@ -235,17 +221,16 @@ const styles = StyleSheet.create({
         padding: 20,
         alignItems: 'center',
     },
-    // Área de upload
     uploadArea: {
         width: '100%',
-        aspectRatio: 1, // Quadrado
+        aspectRatio: 1,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: '#374151', // Gray 700
+        borderColor: '#374151',
         borderStyle: 'dashed',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#1F2937', // Gray 800
+        backgroundColor: '#1F2937',
         marginBottom: 20,
         overflow: 'hidden',
     },
@@ -254,26 +239,21 @@ const styles = StyleSheet.create({
         gap: 5,
     },
     placeholderText: {
-        color: '#D1D5DB', // Gray 300
+        color: '#D1D5DB',
         fontSize: 16,
         fontWeight: '500',
         marginTop: 10,
-    },
-    placeholderSubText: {
-        color: '#6B7280', // Gray 500
-        fontSize: 12,
     },
     imagePreview: {
         width: '100%',
         height: '100%',
         resizeMode: 'cover',
     },
-    // Botão de Envio
     submitButton: {
         width: '100%',
         paddingVertical: 14,
         borderRadius: 10,
-        backgroundColor: '#4F46E5', // Indigo 600
+        backgroundColor: '#4F46E5',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -285,10 +265,9 @@ const styles = StyleSheet.create({
     disabledButton: {
         opacity: 0.5,
     },
-    // Erros
     errorBox: {
         width: '100%',
-        backgroundColor: '#991B1B', // Red 800
+        backgroundColor: '#991B1B',
         padding: 12,
         borderRadius: 8,
         marginBottom: 20,
@@ -296,8 +275,46 @@ const styles = StyleSheet.create({
         borderColor: '#F87171',
     },
     errorText: {
-        color: '#FEE2E2', // Red 100
+        color: '#FEE2E2',
         fontSize: 14,
         textAlign: 'center',
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '80%',
+        backgroundColor: '#1F2937',
+        borderRadius: 16,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: '#374151',
+    },
+    modalTitle: {
+        color: '#FFF',
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    modalOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        gap: 12,
+    },
+    modalOptionText: {
+        color: '#FFF',
+        fontSize: 16,
+    },
+    separator: {
+        height: 1,
+        backgroundColor: '#374151',
+        marginVertical: 4,
     }
 });

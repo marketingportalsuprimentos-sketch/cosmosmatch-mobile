@@ -1,7 +1,9 @@
+// mobile/src/features/profile/components/ProfileGalleryGrid.tsx
+
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { Plus, Heart, MessageCircle } from 'lucide-react-native';
-import { useTranslation } from 'react-i18next'; // <--- I18N
+import { useTranslation } from 'react-i18next';
 import { ProfilePhoto } from '../../../types/profile.types';
 
 interface ProfileGalleryGridProps {
@@ -24,7 +26,7 @@ const MAX_GRID_HEIGHT = (IMAGE_SIZE * 2) + GAP;
 export const ProfileGalleryGrid = ({ 
     photos, isOwner, onAddPhoto, onPhotoClick 
 }: ProfileGalleryGridProps) => {
-    const { t } = useTranslation(); // <--- HOOK
+    const { t } = useTranslation();
 
     if (!isOwner && photos.length === 0) {
         return (
@@ -59,6 +61,7 @@ export const ProfileGalleryGrid = ({
                                     </View>
                                     <View style={styles.stat}>
                                         <MessageCircle size={10} color="#FFF" />
+                                        {/* Versão Limpa: Usa o dado direto do banco */}
                                         <Text style={styles.statText}>{photo.commentsCount}</Text>
                                     </View>
                                 </View>

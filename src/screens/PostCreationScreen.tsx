@@ -1,24 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, Image, TextInput, 
-  ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Platform, LogBox, StatusBar
+  ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Platform, StatusBar
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useCreatePost } from '../features/feed/hooks/useFeed';
 import { LinearGradient } from 'expo-linear-gradient';
+// CORREÇÃO: Voltando para expo-av (compatível com Expo Go)
 import { Video, ResizeMode } from 'expo-av';
-import { useTranslation } from 'react-i18next'; // <--- I18N
-
-LogBox.ignoreLogs(['Video component from `expo-av` is deprecated', 'MediaTypeOptions']);
+import { useTranslation } from 'react-i18next'; 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MAX_VIDEO_DURATION = 23; 
+const MAX_VIDEO_DURATION = 60; 
 
 export default function PostCreationScreen() {
   const navigation = useNavigation<any>();
-  const { t } = useTranslation(); // <--- HOOK
+  const { t } = useTranslation(); 
   const { mutate: createPost, isPending } = useCreatePost();
 
   const [mediaUri, setMediaUri] = useState<string | null>(null);
@@ -27,8 +26,6 @@ export default function PostCreationScreen() {
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
 
   const processMedia = (asset: ImagePicker.ImagePickerAsset) => {
-    console.log('Mídia processada:', asset.type, 'Tamanho:', asset.fileSize, 'Duração:', asset.duration);
-    
     if (asset.type === 'video') {
       const durationSec = (asset.duration || 0) / 1000; 
       if (durationSec > (MAX_VIDEO_DURATION + 3)) { 
@@ -47,9 +44,9 @@ export default function PostCreationScreen() {
   const openGallery = async () => {
     try {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All,
-            allowsEditing: false, 
-            quality: 0.6, 
+            mediaTypes: ImagePicker.MediaTypeOptions.All, // Sintaxe antiga compatível
+            allowsEditing: true, 
+            quality: 0.8, 
             videoMaxDuration: MAX_VIDEO_DURATION,
         });
         if (!result.canceled) processMedia(result.assets[0]);
@@ -61,29 +58,25 @@ export default function PostCreationScreen() {
   const openCamera = async (mode: 'photo' | 'video') => {
     try {
         const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
-        
         if (cameraPerm.status !== 'granted') {
             Alert.alert(t('permission_denied'), t('enable_camera_permission'));
             return;
         }
 
-        console.log(`Abrindo câmera no modo: ${mode}`);
-        const mediaTypes = mode === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images;
-
         let result;
         if (mode === 'video') {
             result = await ImagePicker.launchCameraAsync({
-                mediaTypes: mediaTypes,
-                allowsEditing: false,
+                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+                allowsEditing: true,
                 videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
                 quality: 0.6,
                 videoMaxDuration: MAX_VIDEO_DURATION, 
             });
         } else {
             result = await ImagePicker.launchCameraAsync({
-                mediaTypes: mediaTypes,
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: false,
-                quality: 0.5, 
+                quality: 0.6, 
                 exif: false,
             });
         }
@@ -91,7 +84,6 @@ export default function PostCreationScreen() {
         if (!result.canceled) processMedia(result.assets[0]);
 
     } catch (error) {
-        console.error("Erro Câmera:", error);
         Alert.alert(t('error'), t('error_capture'));
     }
   };
@@ -176,7 +168,15 @@ export default function PostCreationScreen() {
         <StatusBar hidden />
         <View style={styles.mediaLayer}>
             {mediaType === 'video' ? (
-                <Video source={{ uri: mediaUri }} style={styles.fullScreenMedia} resizeMode={ResizeMode.COVER} shouldPlay={true} isLooping={true} isMuted={false} />
+                // PLAYER ANTIGO (Expo AV)
+                <Video
+                  source={{ uri: mediaUri }}
+                  style={styles.fullScreenMedia}
+                  resizeMode={ResizeMode.COVER}
+                  isLooping
+                  shouldPlay
+                  isMuted={false}
+                />
             ) : (
                 <Image source={{ uri: mediaUri }} style={styles.fullScreenMedia} resizeMode="cover" />
             )}

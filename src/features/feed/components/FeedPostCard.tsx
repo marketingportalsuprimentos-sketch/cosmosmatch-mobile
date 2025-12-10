@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FeedPost, MediaType } from '../services/feedApi';
-import { useTranslation } from 'react-i18next'; // <--- I18N
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -17,7 +17,7 @@ interface FeedPostCardProps {
 }
 
 export function FeedPostCard({ post, authorName, authorAvatar, onLike, onComment, onDelete, isOwner }: FeedPostCardProps) {
-  const { t, i18n } = useTranslation(); // <--- HOOK
+  const { t, i18n } = useTranslation();
   
   // Data localizada
   const date = new Date(post.createdAt).toLocaleDateString(i18n.language, { day: '2-digit', month: 'short' });
@@ -42,6 +42,8 @@ export function FeedPostCard({ post, authorName, authorAvatar, onLike, onComment
       </View>
 
       <View style={styles.mediaContainer}>
+         {/* Nota: Para um card estático na lista, usamos placeholder. 
+             Se precisar de autoplay aqui, use VideoView com controls=false */}
          {post.mediaType === MediaType.VIDEO ? (
             <View style={styles.videoPlaceholder}>
                 <Ionicons name="play-circle" size={50} color="white" />
@@ -82,7 +84,7 @@ const styles = StyleSheet.create({
   dateText: { color: '#9CA3AF', fontSize: 12 },
   mediaContainer: { width: '100%', height: width }, 
   image: { width: '100%', height: '100%' },
-  videoPlaceholder: { width: '100%', height: '100%', backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' },
+  videoPlaceholder: { width: '100%', height: '100%', backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   actionsRow: { flexDirection: 'row', padding: 10, gap: 20 },
   actionButton: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   actionText: { color: 'white', fontWeight: 'bold', fontSize: 14 },

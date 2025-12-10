@@ -1,3 +1,5 @@
+// mobile/src/features/profile/services/profileApi.ts
+
 import { api } from '../../../services/api';
 import type {
   Profile,
@@ -32,8 +34,19 @@ export const addPhotoToGallery = async (photoFile: any, fileName: string): Promi
 export const deletePhotoFromGallery = async (photoId: string): Promise<void> => { await api.delete(`/profile/gallery/${photoId}`); };
 export const likeGalleryPhoto = async (photoId: string): Promise<ProfilePhotoLike> => { const { data } = await api.post<ProfilePhotoLike>(`/profile/gallery/${photoId}/like`); return data; };
 export const unlikeGalleryPhoto = async (photoId: string): Promise<void> => { await api.delete(`/profile/gallery/${photoId}/like`); };
-export const commentOnGalleryPhoto = async (photoId: string, commentData: CreateProfilePhotoCommentDto): Promise<ProfilePhotoComment> => { const { data } = await api.post<ProfilePhotoComment>(`/profile/gallery/${photoId}/comment`, commentData); return data; };
-export const getGalleryPhotoComments = async (photoId: string): Promise<ProfilePhotoComment[]> => { const { data } = await api.get<ProfilePhotoComment[]>(`/profile/gallery/${photoId}/comments`); return data; };
+
+// --- CORREÇÃO: Removido '/photo' para bater com a nova rota do Backend ---
+export const commentOnGalleryPhoto = async (photoId: string, commentData: CreateProfilePhotoCommentDto): Promise<ProfilePhotoComment> => { 
+    // Agora bate com @Post('gallery/:photoId/comment')
+    const { data } = await api.post<ProfilePhotoComment>(`/profile/gallery/${photoId}/comment`, commentData); 
+    return data; 
+};
+
+export const getGalleryPhotoComments = async (photoId: string): Promise<ProfilePhotoComment[]> => { 
+    // Agora bate com @Get('gallery/:photoId/comments')
+    const { data } = await api.get<ProfilePhotoComment[]>(`/profile/gallery/${photoId}/comments`); 
+    return data; 
+};
 
 // --- SOCIAL ---
 export const followUser = async (userId: string): Promise<void> => { await api.post(`/social/follow/${userId}`); };
@@ -46,7 +59,7 @@ export const getMyBlockedList = async (): Promise<BasicUserInfo[]> => { const { 
 export const likeUser = async (userId: string): Promise<void> => { await api.post(`/social/like/${userId}`); };
 export const getLikesReceived = async (): Promise<BasicUserInfo[]> => { const { data } = await api.get<BasicUserInfo[]>('/social/likes/received'); return data; };
 
-// --- LIKES NÃO LIDOS (IGUAL WEB) ---
+// --- LIKES NÃO LIDOS ---
 export const getUnreadLikesCount = async (): Promise<{ count: number }> => { 
     const { data } = await api.get<{ count: number }>('/social/likes/unread-count'); 
     return data; 
