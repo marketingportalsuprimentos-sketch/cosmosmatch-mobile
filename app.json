@@ -26,13 +26,8 @@
         "backgroundColor": "#111827"
       },
       "package": "com.cosmosmatch.app",
-      "versionCode": 10,
-      "softwareKeyboardLayoutMode": "pan",
-      "predictiveBackGestureEnabled": false
-    },
-    "androidNavigationBar": {
-      "visible": "immersive",
-      "backgroundColor": "#00000000"
+      "versionCode": 11,
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -49,7 +44,15 @@
         }
       ],
       "expo-localization",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
