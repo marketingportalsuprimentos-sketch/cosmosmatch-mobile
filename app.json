@@ -48,7 +48,8 @@
           "backgroundColor": "#00000000"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-video"
     ],
     "extra": {
       "eas": {
