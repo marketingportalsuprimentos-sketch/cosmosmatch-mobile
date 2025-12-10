@@ -26,7 +26,7 @@
         "backgroundColor": "#111827"
       },
       "package": "com.cosmosmatch.app",
-      "versionCode": 9,
+      "versionCode": 10,
       "softwareKeyboardLayoutMode": "pan",
       "predictiveBackGestureEnabled": false
     },
@@ -54,19 +54,7 @@
     "extra": {
       "eas": {
         "projectId": "38e7d90e-1500-43a1-97c7-55ed467a6905"
-      },
-      "expo-navigation-bar": {
-        "position": "absolute",
-        "visibility": "hidden",
-        "behavior": "overlay-swipe",
-        "backgroundColor": "#00000000"
       }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/38e7d90e-1500-43a1-97c7-55ed467a6905"
     }
   }
 }
