@@ -1,5 +1,4 @@
 // mobile/src/screens/FeedScreen.tsx
-
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   View,
@@ -19,7 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video'; 
 import { Ionicons } from '@expo/vector-icons'; 
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-
 import { storage } from '../lib/storage';
 import { ENV } from '../config/env';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,37 +26,25 @@ import { FeedCommentSheet } from '../features/feed/components/FeedCommentSheet';
 const { width, height } = Dimensions.get('window');
 const API_BASE = ENV?.API_URL || 'https://cosmosmatch-backend.onrender.com/api';
 
-// --- FUNÇÃO DE OTIMIZAÇÃO V3 (CORRIGIDA E AGRESSIVA) ---
+// --- FUNÇÃO FINAL V4 (GARANTIDA PARA QUALQUER URL CLOUDINARY) ---
 const getOptimizedVideoUrl = (url: string) => {
-  if (!url) return '';
-  if (!url.includes('cloudinary.com')) return url;
-  
-  // Se já tiver a otimização completa, não mexe
-  if (url.includes('vc_h264') && url.includes('br_1m')) return url;
+  if (!url || !url.includes('cloudinary.com')) return url;
 
-  // CORREÇÃO: Alvo exato '/video/upload/' para garantir que o replace funcione
-  // Se a URL for de imagem por engano (/image/upload/), ele também tenta corrigir
-  let newUrl = url;
-  
-  if (newUrl.includes('/video/upload/')) {
-    newUrl = newUrl.replace(
-      '/video/upload/',
-      '/video/upload/f_mp4,vc_h264,q_auto:eco,br_1m/'
-    );
-  } else if (newUrl.includes('/upload/')) {
-    // Fallback caso a URL venha diferente
-    newUrl = newUrl.replace(
-      '/upload/',
-      '/upload/f_mp4,vc_h264,q_auto:eco,br_1m/'
-    );
+  // Se já tiver otimizado, retorna
+  if (url.includes('vc_h264')) return url;
+
+  // Adiciona transformações logo após /upload/ usando REGEX (Pega tudo!)
+  let optimized = url.replace(
+    /\/upload\//,
+    '/upload/f_mp4,vc_h264,q_auto:eco,br_1m/'
+  );
+
+  // Força saída mp4 se vier mov
+  if (optimized.endsWith('.mov')) {
+    optimized = optimized.replace('.mov', '.mp4');
   }
 
-  // Garante que a extensão final seja .mp4 (Cloudinary aceita trocar .mov por .mp4 na marra)
-  if (newUrl.endsWith('.mov')) {
-    newUrl = newUrl.replace('.mov', '.mp4');
-  }
-
-  return newUrl;
+  return optimized;
 };
 
 type FeedPost = {
@@ -76,39 +62,34 @@ type FeedDeck = {
   posts: FeedPost[];
 };
 
-// --- COMPONENTE DE VÍDEO ---
-const VideoComponent = ({ uri, isActive }: { uri: string, isActive: boolean }) => {
-  // APLICA A OTIMIZAÇÃO AQUI
+// --- VIDEO COMPONENT ---
+const VideoComponent = ({ uri, isActive }: { uri: string; isActive: boolean }) => {
   const optimizedUri = getOptimizedVideoUrl(uri);
-  
-  const player = useVideoPlayer(optimizedUri, player => {
+
+  const player = useVideoPlayer(optimizedUri, (player) => {
     player.loop = true;
     player.muted = false;
-    // Força o player a ficar mudo se não estiver ativo para economizar recursos
     if (!isActive) player.pause();
   });
 
   useEffect(() => {
-    if (isActive) {
-      player.play();
-    } else {
-      player.pause();
-    }
+    if (isActive) player.play();
+    else player.pause();
   }, [isActive, player]);
 
   return (
     <View style={styles.fullScreenMedia}>
-      <VideoView 
-        player={player} 
-        style={styles.fullScreenMedia} 
-        contentFit="cover" 
+      <VideoView
+        player={player}
+        style={styles.fullScreenMedia}
+        contentFit="cover"
         nativeControls={false}
       />
-      
-      {/* --- DIAGNÓSTICO (Remova depois se quiser) --- */}
-      <View style={{ position: 'absolute', top: 100, left: 20, right: 20, pointerEvents: 'none' }}>
-        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, textAlign: 'center' }}>
-          {optimizedUri.includes('vc_h264') ? '✅ OTIMIZADO' : '❌ ORIGINAL'}
+
+      {/* Pequeno indicador discreto no topo */}
+      <View style={{ position: 'absolute', top: 100, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 4, borderRadius: 4 }}>
+        <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
+          {optimizedUri.includes('vc_h264') ? '✅ V25 OK' : '❌ V25 FALHOU'}
         </Text>
       </View>
     </View>
