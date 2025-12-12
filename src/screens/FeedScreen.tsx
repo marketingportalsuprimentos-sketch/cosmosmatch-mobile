@@ -1,5 +1,4 @@
 // mobile/src/screens/FeedScreen.tsx
-
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   View,
@@ -16,7 +15,9 @@ import {
   ViewToken
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Video, ResizeMode } from 'expo-av';
+
+// Player Moderno
+import { useVideoPlayer, VideoView } from 'expo-video'; 
 import { Ionicons } from '@expo/vector-icons'; 
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 
@@ -27,6 +28,17 @@ import { FeedCommentSheet } from '../features/feed/components/FeedCommentSheet';
 
 const { width, height } = Dimensions.get('window');
 const API_BASE = ENV?.API_URL || 'https://cosmosmatch-backend.onrender.com/api';
+
+// --- FUNÇÃO MÁGICA DO CLOUDINARY ---
+// Transforma qualquer vídeo HEVC/HDR em H.264 Universal para não dar tela preta
+const getOptimizedVideoUrl = (url: string) => {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  // Se já tiver transformação, não mexe
+  if (url.includes('/upload/f_mp4,vc_h264')) return url;
+
+  // Injeta a conversão forçada para H.264 e qualidade automática
+  return url.replace('/upload/', '/upload/f_mp4,vc_h264,q_auto/');
+};
 
 type FeedPost = {
   id: string;
@@ -48,8 +60,35 @@ type FeedDeck = {
   posts: FeedPost[];
 };
 
-// --- COMPONENTES MEMOIZADOS ---
+// --- COMPONENTE DE VÍDEO SEPARADO ---
+const VideoComponent = ({ uri, isActive }: { uri: string, isActive: boolean }) => {
+  // AQUI APLICAMOS A CORREÇÃO DA URL
+  const optimizedUri = getOptimizedVideoUrl(uri);
 
+  const player = useVideoPlayer(optimizedUri, player => {
+    player.loop = true;
+    player.muted = false;
+  });
+
+  useEffect(() => {
+    if (isActive) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [isActive, player]);
+
+  return (
+    <VideoView 
+      player={player} 
+      style={styles.fullScreenMedia} 
+      contentFit="cover"
+      nativeControls={false}
+    />
+  );
+};
+
+// --- POST ITEM ---
 const PostItem = memo(({ 
   item: post, 
   deck, 
@@ -77,36 +116,19 @@ const PostItem = memo(({
     <View style={{ width: width, height: height, backgroundColor: '#000' }}>
       <View style={styles.mediaContainer}>
         
-        {/* PATCH 1: Só renderiza a Imagem se NÃO for vídeo.
-            Impedimos o Android/iOS de tentar carregar .mp4 como imagem (o que causa tela preta) */}
-        {!isVideo && (
+        {!isVideo ? (
           <Image 
             source={{ uri: post.imageUrl }} 
             style={[styles.fullScreenMedia, { position: 'absolute', zIndex: 1 }]} 
             resizeMode="cover" 
           />
+        ) : (
+          <View style={[styles.fullScreenMedia, { zIndex: 999 }]}>
+             {/* Passamos a URL original, o componente converte lá dentro */}
+             <VideoComponent uri={post.imageUrl} isActive={isActive} />
+          </View>
         )}
 
-        {/* Loading State para vídeo enquanto não carrega */}
-        {isVideo && !isActive && (
-           <View style={[styles.fullScreenMedia, { backgroundColor: '#1a1a1a', zIndex: 1, justifyContent: 'center', alignItems: 'center' }]}>
-              <ActivityIndicator color="#A78BFA" />
-           </View>
-        )}
-
-        {/* O VÍDEO - PATCH 3: ZIndex alto e Elevation para forçar topo no Android */}
-        {isVideo && isActive && (
-          <Video
-            source={{ uri: post.imageUrl }}
-            style={[styles.fullScreenMedia, { zIndex: 9999, elevation: 9999 }]} 
-            resizeMode={ResizeMode.COVER}
-            isLooping
-            shouldPlay={true}
-            isMuted={false}
-            useNativeControls={false}
-            onError={(e) => console.log("Erro no player:", e)}
-          />
-        )}
       </View>
 
       <View style={[styles.headerOverlay, { top: insets.top + 10 }]}>
@@ -143,6 +165,7 @@ const PostItem = memo(({
          prev.item.commentsCount === next.item.commentsCount;
 });
 
+// --- DECK ITEM ---
 const DeckItem = memo(({ 
   item: deck, 
   isDeckActive, 
@@ -188,10 +211,7 @@ const DeckItem = memo(({
       horizontal
       pagingEnabled
       showsHorizontalScrollIndicator={false}
-      
-      // PATCH 2.1: removeClippedSubviews FALSE para não matar o vídeo na horizontal
       removeClippedSubviews={false} 
-      
       initialNumToRender={1}
       maxToRenderPerBatch={1}
       windowSize={2}
@@ -202,6 +222,7 @@ const DeckItem = memo(({
   );
 }, (prev, next) => prev.isDeckActive === next.isDeckActive);
 
+// --- FEED SCREEN ---
 export const FeedScreen = () => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth(); 
@@ -328,10 +349,7 @@ export const FeedScreen = () => {
         getItemLayout={(data, index) => ({ length: height, offset: height * index, index })}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        
-        // PATCH 2.2: removeClippedSubviews FALSE para não matar o vídeo na vertical
         removeClippedSubviews={false} 
-        
         initialNumToRender={1}
         maxToRenderPerBatch={1}
         windowSize={3}
