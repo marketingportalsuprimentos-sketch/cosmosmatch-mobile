@@ -1,4 +1,5 @@
 // mobile/src/screens/FeedScreen.tsx
+
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   View,
@@ -18,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useVideoPlayer, VideoView } from 'expo-video'; 
 import { Ionicons } from '@expo/vector-icons'; 
 import { useNavigation, useIsFocused } from '@react-navigation/native';
+
 import { storage } from '../lib/storage';
 import { ENV } from '../config/env';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,24 +28,19 @@ import { FeedCommentSheet } from '../features/feed/components/FeedCommentSheet';
 const { width, height } = Dimensions.get('window');
 const API_BASE = ENV?.API_URL || 'https://cosmosmatch-backend.onrender.com/api';
 
-// --- FUNÇÃO FINAL V4 (GARANTIDA PARA QUALQUER URL CLOUDINARY) ---
+// --- FUNÇÃO DE OTIMIZAÇÃO (Mantemos a V4 que é perfeita) ---
 const getOptimizedVideoUrl = (url: string) => {
   if (!url || !url.includes('cloudinary.com')) return url;
-
-  // Se já tiver otimizado, retorna
   if (url.includes('vc_h264')) return url;
 
-  // Adiciona transformações logo após /upload/ usando REGEX (Pega tudo!)
   let optimized = url.replace(
     /\/upload\//,
     '/upload/f_mp4,vc_h264,q_auto:eco,br_1m/'
   );
 
-  // Força saída mp4 se vier mov
   if (optimized.endsWith('.mov')) {
     optimized = optimized.replace('.mov', '.mp4');
   }
-
   return optimized;
 };
 
@@ -51,7 +48,7 @@ type FeedPost = {
   id: string;
   imageUrl: string;
   content?: string;
-  mediaType: 'PHOTO' | 'VIDEO';
+  mediaType: 'PHOTO' | 'VIDEO' | 'video' | 'photo'; // Aceita minúsculo agora
   likesCount: number;
   commentsCount: number;
   isLikedByMe: boolean;
@@ -85,11 +82,10 @@ const VideoComponent = ({ uri, isActive }: { uri: string; isActive: boolean }) =
         contentFit="cover"
         nativeControls={false}
       />
-
-      {/* Pequeno indicador discreto no topo */}
-      <View style={{ position: 'absolute', top: 100, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: 4, borderRadius: 4 }}>
-        <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
-          {optimizedUri.includes('vc_h264') ? '✅ V25 OK' : '❌ V25 FALHOU'}
+      {/* DIAGNÓSTICO V26 - AGORA VAI APARECER! */}
+      <View style={{ position: 'absolute', top: 120, alignSelf: 'center', backgroundColor: 'red', padding: 8, borderRadius: 8, zIndex: 9999 }}>
+        <Text style={{ color: 'white', fontWeight: 'bold' }}>
+          {optimizedUri.includes('vc_h264') ? '✅ V26 DETECTOU VÍDEO' : '❌ V26 ERRO URL'}
         </Text>
       </View>
     </View>
@@ -97,14 +93,22 @@ const VideoComponent = ({ uri, isActive }: { uri: string; isActive: boolean }) =
 };
 
 const PostItem = memo(({ item: post, deck, isActive, onGoToProfile, onDelete, onLike, onComment, isOwner, insets }: any) => {
-  const isVideo = post.mediaType === 'VIDEO';
+  
+  // --- A CORREÇÃO MÁGICA ESTÁ AQUI ---
+  // Verifica se é VIDEO (maiúsculo ou minúsculo) OU se a URL termina com video (.mov/.mp4)
+  const isVideo = 
+    post.mediaType === 'VIDEO' || 
+    post.mediaType === 'video' || 
+    (post.imageUrl && (post.imageUrl.includes('.mov') || post.imageUrl.includes('.mp4')));
 
   return (
     <View style={{ width: width, height: height, backgroundColor: '#000' }}>
       <View style={styles.mediaContainer}>
         {!isVideo ? (
+          // SE FOR FOTO
           <Image source={{ uri: post.imageUrl }} style={[styles.fullScreenMedia, { position: 'absolute' }]} resizeMode="cover" />
         ) : (
+          // SE FOR VÍDEO
           <View style={[styles.fullScreenMedia, { zIndex: 999 }]}>
              <VideoComponent uri={post.imageUrl} isActive={isActive} />
           </View>
