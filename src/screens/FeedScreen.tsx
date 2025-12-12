@@ -13,7 +13,8 @@ import {
   StatusBar,
   Alert,
   RefreshControl,
-  ViewToken
+  ViewToken,
+  Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
@@ -76,38 +77,32 @@ const PostItem = memo(({
   const isVideo = post.mediaType === 'VIDEO';
 
   return (
-    <View style={{ width, height: height, backgroundColor: '#000' }}>
+    // GARANTIA DE LAYOUT: flex: 1 aqui ajuda a preencher o DeckItem
+    <View style={{ width: width, height: height, backgroundColor: '#000' }}>
       <View style={styles.mediaContainer}>
         
-        {/* CAMADA 1: A FOTO (O Segredo!) 
-            Ela fica SEMPRE fixa no fundo. Se o vídeo falhar, travar ou estiver carregando,
-            o usuário vê essa foto. Nunca vê tela preta.
-        */}
+        {/* CAMADA 1: A FOTO (Backup visual para evitar fundo preto) */}
         <Image 
           source={{ uri: post.imageUrl }} 
           style={[styles.fullScreenMedia, { position: 'absolute', zIndex: 1 }]} 
           resizeMode="cover" 
         />
 
-        {/* CAMADA 2: O VÍDEO (Só existe se for a vez dele)
-            Se isActive for false (você rolou pra outro usuário), esse componente deixa de existir.
-            Isso limpa a memória do Android. Quando você volta, ele nasce de novo.
-        */}
+        {/* CAMADA 2: O VÍDEO (Só renderiza se for a vez dele) */}
         {isVideo && isActive && (
           <Video
             source={{ uri: post.imageUrl }}
-            style={[styles.fullScreenMedia, { zIndex: 2 }]} // Fica por cima da foto
+            style={[styles.fullScreenMedia, { zIndex: 2 }]} 
             resizeMode={ResizeMode.COVER}
             isLooping
             shouldPlay={true}
             isMuted={false}
             useNativeControls={false}
-            // Pequeno truque: posterSource aqui as vezes buga no Android, 
-            // por isso usamos a Image manual na Camada 1.
           />
         )}
       </View>
 
+      {/* Overlay do Topo (Autor) */}
       <View style={[styles.headerOverlay, { top: insets.top + 10 }]}>
         <TouchableOpacity style={styles.authorRow} onPress={() => onGoToProfile(deck.author.id)}>
           <Image source={{ uri: deck.author.profile?.imageUrl || 'https://via.placeholder.com/50' }} style={styles.avatar} />
@@ -120,6 +115,7 @@ const PostItem = memo(({
         )}
       </View>
 
+      {/* Botões de Ação (Like/Comment) */}
       <View style={[styles.actionsContainer, { bottom: insets.bottom + 100 }]}>
         <TouchableOpacity style={styles.actionButton} onPress={() => onLike(post)}>
           <Ionicons name={post.isLikedByMe ? "heart" : "heart-outline"} size={32} color={post.isLikedByMe ? "#EF4444" : "#FFF"} />
@@ -131,13 +127,13 @@ const PostItem = memo(({
         </TouchableOpacity>
       </View>
 
+      {/* Legenda do Post */}
       <View style={[styles.bottomOverlay, { bottom: insets.bottom + 20 }]}>
          {post.content && <Text style={styles.postContent} numberOfLines={3}>{post.content}</Text>}
       </View>
     </View>
   );
 }, (prev, next) => {
-  // Otimização: Só atualiza se a visibilidade mudar
   return prev.isActive === next.isActive && 
          prev.item.likesCount === next.item.likesCount && 
          prev.item.commentsCount === next.item.commentsCount;
@@ -178,9 +174,6 @@ const DeckItem = memo(({
         <PostItem 
           item={item} 
           deck={deck} 
-          // O VÍDEO SÓ É ATIVO SE: 
-          // 1. O Deck (usuário) for o atual na vertical
-          // 2. O Post (vídeo) for o atual na horizontal
           isActive={isDeckActive && index === activePostIndex} 
           insets={insets}
           isOwner={user?.id === deck.author.id}
@@ -197,9 +190,11 @@ const DeckItem = memo(({
       removeClippedSubviews={true} 
       initialNumToRender={1}
       maxToRenderPerBatch={1}
-      windowSize={2} // Mantém pouca memória na horizontal
+      windowSize={2}
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
+      // CORREÇÃO: Garante que a lista ocupe o espaço no Android
+      contentContainerStyle={{ flexGrow: 1 }}
     />
   );
 }, (prev, next) => prev.isDeckActive === next.isDeckActive);
@@ -217,7 +212,6 @@ export const FeedScreen = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  // Controle de quem está visível na Vertical
   const [activeDeckIndex, setActiveDeckIndex] = useState(0);
 
   const [isCommentVisible, setIsCommentVisible] = useState(false);
@@ -249,6 +243,7 @@ export const FeedScreen = () => {
       } else {
         setDecks(prev => {
           if (shouldRefresh) return [data];
+          // Evita duplicatas se a API mandar o mesmo deck
           const exists = prev.some(d => d.author.id === data.author.id);
           if (exists) return prev;
           return [...prev, data];
@@ -315,7 +310,14 @@ export const FeedScreen = () => {
     itemVisiblePercentThreshold: 70
   }).current;
 
-  if (loading && decks.length === 0) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#A78BFA" /></View>;
+  // CORREÇÃO: Loading centralizado para evitar tela preta inicial
+  if (loading && decks.length === 0) {
+      return (
+          <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#A78BFA" />
+          </View>
+      );
+  }
 
   return (
     <View style={styles.container}>
@@ -325,8 +327,6 @@ export const FeedScreen = () => {
         renderItem={({ item, index }) => (
           <DeckItem 
             item={item} 
-            // A MÁGICA: Se o deck não for o ativo, isActive vira FALSE para todos os vídeos dele.
-            // Isso mata os vídeos da memória, mas mantém as fotos.
             isDeckActive={index === activeDeckIndex && isScreenFocused} 
             insets={insets} 
             user={user}
@@ -347,11 +347,15 @@ export const FeedScreen = () => {
         removeClippedSubviews={true}
         initialNumToRender={1}
         maxToRenderPerBatch={1}
-        windowSize={3} // Garante que decks distantes sejam desmontados
+        windowSize={3}
         onViewableItemsChanged={onViewableDecksChanged}
         viewabilityConfig={viewabilityConfigVertical}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A78BFA" />}
+        
+        // CORREÇÃO MASTER PARA ANDROID NOVO:
+        contentContainerStyle={{ flexGrow: 1 }}
       />
+      
       {selectedPostId && selectedAuthorId && (
           <FeedCommentSheet isVisible={isCommentVisible} onClose={() => setIsCommentVisible(false)} postId={selectedPostId} authorId={selectedAuthorId} />
       )}

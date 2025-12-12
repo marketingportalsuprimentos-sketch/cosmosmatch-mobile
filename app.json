@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cosmosmatch.app",
-      "buildNumber": "19",
+      "buildNumber": "21",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Precisamos da câmara para você tirar fotos para o seu perfil e criar posts.",
@@ -29,7 +29,7 @@
         "backgroundColor": "#111827"
       },
       "package": "com.cosmosmatch.app",
-      "versionCode": 19,
+      "versionCode": 21,
       "softwareKeyboardLayoutMode": "pan"
     },
     "web": {

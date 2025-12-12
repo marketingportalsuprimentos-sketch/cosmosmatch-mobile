@@ -20,8 +20,7 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
 
   const handleLogin = async () => {
-    console.log("Tentando logar com:", email); // Debug 1
-
+    // Validação básica para evitar chamadas vazias
     if (!email || !password) {
       Alert.alert('Atenção', 'Preencha email e senha');
       return;
@@ -29,10 +28,8 @@ export function LoginScreen() {
 
     try {
       await signIn(email, password);
-      console.log("Login sucesso!"); // Debug 2
     } catch (error: any) {
-      console.log("Erro no Login:", error); // Debug 3
-      // Mostra o erro na tela para sabermos o que é
+      console.log("Erro no Login:", error);
       const msg = error.response?.data?.message || error.message || 'Erro desconhecido';
       Alert.alert('Erro no Login', String(msg));
     }
@@ -42,6 +39,7 @@ export function LoginScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
       
+      {/* Imagem de Fundo Suave */}
       <Image 
         source={require('../../assets/splash-icon.png')} 
         style={[StyleSheet.absoluteFill, { width: '100%', height: '100%', opacity: 0.2 }]} 
@@ -53,6 +51,7 @@ export function LoginScreen() {
         style={StyleSheet.absoluteFill}
       />
 
+      {/* Behavior padding no iOS evita que o teclado cubra o input, mas sem pular a tela */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
@@ -64,12 +63,19 @@ export function LoginScreen() {
 
         <View style={styles.form}>
           <View style={styles.inputGroup}>
+            {/* CORREÇÃO DO PULA-PULA NO IOS AQUI: */}
             <TextInput
               style={styles.input}
               placeholder={t('email_placeholder')}
               placeholderTextColor="#6B7280"
               autoCapitalize="none"
+              
+              // Essas 3 linhas desligam o corretor que faz a tela tremer
+              autoCorrect={false}
+              spellCheck={false}
               keyboardType="email-address"
+              textContentType="emailAddress" // Ajuda o iOS a saber que é email
+              
               value={email}
               onChangeText={setEmail}
             />
@@ -83,6 +89,7 @@ export function LoginScreen() {
               secureTextEntry
               value={password}
               onChangeText={setPassword}
+              autoCapitalize="none"
             />
           </View>
 
