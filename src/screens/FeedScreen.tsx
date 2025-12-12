@@ -13,8 +13,7 @@ import {
   StatusBar,
   Alert,
   RefreshControl,
-  ViewToken,
-  Platform
+  ViewToken
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
@@ -29,7 +28,6 @@ import { FeedCommentSheet } from '../features/feed/components/FeedCommentSheet';
 const { width, height } = Dimensions.get('window');
 const API_BASE = ENV?.API_URL || 'https://cosmosmatch-backend.onrender.com/api';
 
-// --- TYPES ---
 type FeedPost = {
   id: string;
   imageUrl: string;
@@ -52,7 +50,6 @@ type FeedDeck = {
 
 // --- COMPONENTES MEMOIZADOS ---
 
-// 1. Post Individual (Versão Anti-Tela Preta)
 const PostItem = memo(({ 
   item: post, 
   deck, 
@@ -77,32 +74,41 @@ const PostItem = memo(({
   const isVideo = post.mediaType === 'VIDEO';
 
   return (
-    // GARANTIA DE LAYOUT: flex: 1 aqui ajuda a preencher o DeckItem
     <View style={{ width: width, height: height, backgroundColor: '#000' }}>
       <View style={styles.mediaContainer}>
         
-        {/* CAMADA 1: A FOTO (Backup visual para evitar fundo preto) */}
-        <Image 
-          source={{ uri: post.imageUrl }} 
-          style={[styles.fullScreenMedia, { position: 'absolute', zIndex: 1 }]} 
-          resizeMode="cover" 
-        />
+        {/* PATCH 1: Só renderiza a Imagem se NÃO for vídeo.
+            Impedimos o Android/iOS de tentar carregar .mp4 como imagem (o que causa tela preta) */}
+        {!isVideo && (
+          <Image 
+            source={{ uri: post.imageUrl }} 
+            style={[styles.fullScreenMedia, { position: 'absolute', zIndex: 1 }]} 
+            resizeMode="cover" 
+          />
+        )}
 
-        {/* CAMADA 2: O VÍDEO (Só renderiza se for a vez dele) */}
+        {/* Loading State para vídeo enquanto não carrega */}
+        {isVideo && !isActive && (
+           <View style={[styles.fullScreenMedia, { backgroundColor: '#1a1a1a', zIndex: 1, justifyContent: 'center', alignItems: 'center' }]}>
+              <ActivityIndicator color="#A78BFA" />
+           </View>
+        )}
+
+        {/* O VÍDEO - PATCH 3: ZIndex alto e Elevation para forçar topo no Android */}
         {isVideo && isActive && (
           <Video
             source={{ uri: post.imageUrl }}
-            style={[styles.fullScreenMedia, { zIndex: 2 }]} 
+            style={[styles.fullScreenMedia, { zIndex: 9999, elevation: 9999 }]} 
             resizeMode={ResizeMode.COVER}
             isLooping
             shouldPlay={true}
             isMuted={false}
             useNativeControls={false}
+            onError={(e) => console.log("Erro no player:", e)}
           />
         )}
       </View>
 
-      {/* Overlay do Topo (Autor) */}
       <View style={[styles.headerOverlay, { top: insets.top + 10 }]}>
         <TouchableOpacity style={styles.authorRow} onPress={() => onGoToProfile(deck.author.id)}>
           <Image source={{ uri: deck.author.profile?.imageUrl || 'https://via.placeholder.com/50' }} style={styles.avatar} />
@@ -115,7 +121,6 @@ const PostItem = memo(({
         )}
       </View>
 
-      {/* Botões de Ação (Like/Comment) */}
       <View style={[styles.actionsContainer, { bottom: insets.bottom + 100 }]}>
         <TouchableOpacity style={styles.actionButton} onPress={() => onLike(post)}>
           <Ionicons name={post.isLikedByMe ? "heart" : "heart-outline"} size={32} color={post.isLikedByMe ? "#EF4444" : "#FFF"} />
@@ -127,7 +132,6 @@ const PostItem = memo(({
         </TouchableOpacity>
       </View>
 
-      {/* Legenda do Post */}
       <View style={[styles.bottomOverlay, { bottom: insets.bottom + 20 }]}>
          {post.content && <Text style={styles.postContent} numberOfLines={3}>{post.content}</Text>}
       </View>
@@ -139,7 +143,6 @@ const PostItem = memo(({
          prev.item.commentsCount === next.item.commentsCount;
 });
 
-// 2. Deck (Lista Horizontal de Vídeos do Usuário)
 const DeckItem = memo(({ 
   item: deck, 
   isDeckActive, 
@@ -161,9 +164,7 @@ const DeckItem = memo(({
     }
   }, []);
 
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 80 
-  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
 
   if (!deck.posts || deck.posts.length === 0) return null;
 
@@ -187,19 +188,20 @@ const DeckItem = memo(({
       horizontal
       pagingEnabled
       showsHorizontalScrollIndicator={false}
-      removeClippedSubviews={true} 
+      
+      // PATCH 2.1: removeClippedSubviews FALSE para não matar o vídeo na horizontal
+      removeClippedSubviews={false} 
+      
       initialNumToRender={1}
       maxToRenderPerBatch={1}
       windowSize={2}
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
-      // CORREÇÃO: Garante que a lista ocupe o espaço no Android
       contentContainerStyle={{ flexGrow: 1 }}
     />
   );
 }, (prev, next) => prev.isDeckActive === next.isDeckActive);
 
-// --- TELA PRINCIPAL (Lista Vertical de Usuários) ---
 export const FeedScreen = () => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth(); 
@@ -211,7 +213,6 @@ export const FeedScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-
   const [activeDeckIndex, setActiveDeckIndex] = useState(0);
 
   const [isCommentVisible, setIsCommentVisible] = useState(false);
@@ -222,11 +223,8 @@ export const FeedScreen = () => {
     try {
       const token = await storage.getToken();
       if (!token) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
+        setLoading(false); setRefreshing(false); return;
       }
-      
       const response = await fetch(`${API_BASE}/post/feed?page=${pageNum}`, {
         method: 'GET',
         headers: {
@@ -234,7 +232,6 @@ export const FeedScreen = () => {
           'Content-Type': 'application/json',
         },
       });
-
       if (!response.ok) throw new Error('Falha ao buscar feed');
       const data = await response.json();
 
@@ -243,7 +240,6 @@ export const FeedScreen = () => {
       } else {
         setDecks(prev => {
           if (shouldRefresh) return [data];
-          // Evita duplicatas se a API mandar o mesmo deck
           const exists = prev.some(d => d.author.id === data.author.id);
           if (exists) return prev;
           return [...prev, data];
@@ -252,8 +248,7 @@ export const FeedScreen = () => {
     } catch (error) {
       console.error('Erro ao buscar feed:', error);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setLoading(false); setRefreshing(false);
     }
   }, []);
 
@@ -278,9 +273,7 @@ export const FeedScreen = () => {
   const handlers = {
     handleGoToProfile: (userId: string) => { navigation.navigate('PublicProfile', { userId }); },
     handleOpenComments: (postId: string, authorId: string) => {
-        setSelectedPostId(postId);
-        setSelectedAuthorId(authorId);
-        setIsCommentVisible(true);
+        setSelectedPostId(postId); setSelectedAuthorId(authorId); setIsCommentVisible(true);
     },
     handleDeletePost: (postId: string, authorId: string) => {
       Alert.alert("Apagar Post", "Tem certeza?", [
@@ -295,9 +288,7 @@ export const FeedScreen = () => {
           }
       ]);
     },
-    handleLikePlaceholder: (post: FeedPost) => {
-        console.log("Like pressed on", post.id);
-    }
+    handleLikePlaceholder: (post: FeedPost) => { console.log("Like pressed on", post.id); }
   };
 
   const onViewableDecksChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -306,11 +297,8 @@ export const FeedScreen = () => {
     }
   }, []);
 
-  const viewabilityConfigVertical = useRef({
-    itemVisiblePercentThreshold: 70
-  }).current;
+  const viewabilityConfigVertical = useRef({ itemVisiblePercentThreshold: 70 }).current;
 
-  // CORREÇÃO: Loading centralizado para evitar tela preta inicial
   if (loading && decks.length === 0) {
       return (
           <View style={styles.loadingContainer}>
@@ -337,25 +325,21 @@ export const FeedScreen = () => {
         pagingEnabled
         vertical
         showsVerticalScrollIndicator={false}
-        getItemLayout={(data, index) => ({
-          length: height,
-          offset: height * index,
-          index,
-        })}
+        getItemLayout={(data, index) => ({ length: height, offset: height * index, index })}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        removeClippedSubviews={true}
+        
+        // PATCH 2.2: removeClippedSubviews FALSE para não matar o vídeo na vertical
+        removeClippedSubviews={false} 
+        
         initialNumToRender={1}
         maxToRenderPerBatch={1}
         windowSize={3}
         onViewableItemsChanged={onViewableDecksChanged}
         viewabilityConfig={viewabilityConfigVertical}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A78BFA" />}
-        
-        // CORREÇÃO MASTER PARA ANDROID NOVO:
         contentContainerStyle={{ flexGrow: 1 }}
       />
-      
       {selectedPostId && selectedAuthorId && (
           <FeedCommentSheet isVisible={isCommentVisible} onClose={() => setIsCommentVisible(false)} postId={selectedPostId} authorId={selectedAuthorId} />
       )}
