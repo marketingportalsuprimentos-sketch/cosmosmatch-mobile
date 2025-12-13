@@ -15,13 +15,16 @@ import { FeedUserDeck } from '../features/feed/components/FeedUserDeck';
 import { FeedCommentSheet } from '../features/feed/components/FeedCommentSheet';
 import { PersonalDayCard } from '../features/feed/components/PersonalDayCard';
 
+const { height: WINDOW_HEIGHT } = Dimensions.get('window');
+
 export function PostsScreen() {
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets(); 
   const { t } = useTranslation();
   
-  const [containerHeight, setContainerHeight] = useState(0);
+  // CORREÇÃO: Inicializa com a altura da janela para evitar tela preta inicial
+  const [containerHeight, setContainerHeight] = useState(WINDOW_HEIGHT);
 
   const { data, isLoading, isError, fetchNextPage, hasNextPage, refetch } = useGetFeed();
   const { mutate: like } = useLikePost();
@@ -78,7 +81,6 @@ export function PostsScreen() {
     }
   };
 
-  // --- NAVEGAÇÃO CORRIGIDA ---
   const handleNavigateToProfile = (userId: string) => {
     if (!userId) return;
     try {
@@ -103,7 +105,6 @@ export function PostsScreen() {
     setCommentSheet({ isOpen: true, postId, authorId });
   };
 
-  // --- SHARE CORRIGIDO ---
   const handleShare = async (postId: string, imageUrl: string, authorName: string) => {
     try {
       const appLink = "https://cosmosmatch.app";
@@ -125,14 +126,14 @@ export function PostsScreen() {
       style={styles.container}
       onLayout={(event) => {
         const { height } = event.nativeEvent.layout;
-        if (Math.abs(containerHeight - height) > 1) {
+        // Atualiza apenas se houver uma diferença significativa para evitar loops
+        if (Math.abs(containerHeight - height) > 5) {
             setContainerHeight(height);
         }
       }}
     >
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
-      {/* CORREÇÃO: pointerEvents="box-none" permite clicar no perfil através da área transparente */}
       <View 
           pointerEvents="box-none"
           style={[
@@ -143,52 +144,52 @@ export function PostsScreen() {
          <PersonalDayCard />
       </View>
       
-      {containerHeight > 0 && (
-        <FlatList
-            ref={verticalListRef}
-            data={decks}
-            keyExtractor={(item, index) => item.author?.id ? `${item.author.id}-${index}` : `deck-${index}`}
-            renderItem={({ item, index }) => (
-            <View style={{ height: containerHeight, width: '100%' }}>
-                <FeedUserDeck 
-                    authorId={item.author?.id}
-                    authorName={item.author?.name || t('unknown_user')}
-                    authorAvatar={item.author?.profile?.imageUrl || null}
-                    posts={item.posts || []} 
-                    isDeckActive={index === currentDeckIndex && isFocused}
-                    paused={commentSheet.isOpen} 
-                    onDeckFinished={handleDeckFinished}
-                    onLikePost={(postId) => {
-                        const post = item.posts?.find(p => p.id === postId);
-                        if (post) handleLike(postId, post.isLikedByMe);
-                    }}
-                    onOpenComments={handleOpenComments}
-                    onSharePost={handleShare}
-                    onNavigateToProfile={handleNavigateToProfile}
-                    onFollowAuthor={handleFollow}
-                    onDeletePost={handleDeletePost} 
-                    customHeight={containerHeight}
-                />
-            </View>
-            )}
-            pagingEnabled
-            snapToInterval={containerHeight}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            showsVerticalScrollIndicator={false}
-            onViewableItemsChanged={handleViewableItemsChanged}
-            viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
-            onEndReached={() => { if (hasNextPage) fetchNextPage(); }}
-            onEndReachedThreshold={1}
-            getItemLayout={(data, index) => ({ length: containerHeight, offset: containerHeight * index, index })}
-            
-            ListEmptyComponent={
+      {/* CORREÇÃO: Removemos a condicional containerHeight > 0 para garantir que renderize */}
+      <FlatList
+          ref={verticalListRef}
+          data={decks}
+          keyExtractor={(item, index) => item.author?.id ? `${item.author.id}-${index}` : `deck-${index}`}
+          renderItem={({ item, index }) => (
+          <View style={{ height: containerHeight, width: '100%' }}>
+              <FeedUserDeck 
+                  authorId={item.author?.id}
+                  authorName={item.author?.name || t('unknown_user')}
+                  authorAvatar={item.author?.profile?.imageUrl || null}
+                  posts={item.posts || []} 
+                  isDeckActive={index === currentDeckIndex && isFocused}
+                  paused={commentSheet.isOpen} 
+                  onDeckFinished={handleDeckFinished}
+                  onLikePost={(postId) => {
+                      const post = item.posts?.find(p => p.id === postId);
+                      if (post) handleLike(postId, post.isLikedByMe);
+                  }}
+                  onOpenComments={handleOpenComments}
+                  onSharePost={handleShare}
+                  onNavigateToProfile={handleNavigateToProfile}
+                  onFollowAuthor={handleFollow}
+                  onDeletePost={handleDeletePost} 
+                  customHeight={containerHeight}
+              />
+          </View>
+          )}
+          pagingEnabled
+          snapToInterval={containerHeight}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          showsVerticalScrollIndicator={false}
+          onViewableItemsChanged={handleViewableItemsChanged}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
+          onEndReached={() => { if (hasNextPage) fetchNextPage(); }}
+          onEndReachedThreshold={1}
+          getItemLayout={(data, index) => ({ length: containerHeight, offset: containerHeight * index, index })}
+          
+          ListEmptyComponent={
+            // CORREÇÃO: Garante que o EmptyState tenha altura mesmo se a lista estiver vazia
             <View style={[styles.emptyStateContainer, { height: containerHeight }]}>
                 <Text style={styles.emptyStateText}>{t('no_posts_found')}</Text>
             </View>
-            }
-        />
-      )}
+          }
+      />
 
       {commentSheet.isOpen && (
         <FeedCommentSheet 

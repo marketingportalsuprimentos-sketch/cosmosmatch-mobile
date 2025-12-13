@@ -17,18 +17,17 @@ const TAB_BAR_HEIGHT = 80;
 const POST_HEIGHT = SCREEN_HEIGHT - TAB_BAR_HEIGHT; 
 const DEFAULT_PHOTO_DURATION = 5000; 
 
-// --- 1. FUNÇÃO DE OTIMIZAÇÃO (V26 - A CORREÇÃO MÁGICA) ---
+// --- FUNÇÃO DE OTIMIZAÇÃO ---
 const getOptimizedVideoUrl = (url: string) => {
-  if (!url || !url.includes('cloudinary.com')) return url;
+  if (!url) return null; // Retorna null se url for undefined/empty
+  if (!url.includes('cloudinary.com')) return url;
   if (url.includes('vc_h264')) return url;
 
-  // Força conversão para MP4 universal (H.264)
   let optimized = url.replace(
     /\/upload\//,
     '/upload/f_mp4,vc_h264,q_auto:eco,br_1m/'
   );
 
-  // Troca extensão .mov por .mp4 na string final
   if (optimized.endsWith('.mov')) {
     optimized = optimized.replace('.mov', '.mp4');
   }
@@ -67,45 +66,39 @@ const DeckPostItem = ({
   onSharePost 
 }: any) => {
   
-  // --- 2. DETECÇÃO ROBUSTA DE VÍDEO (V26) ---
   const isVideo = 
     item.mediaType === MediaType.VIDEO || 
     item.mediaType === 'video' || 
     (item.imageUrl && (item.imageUrl.includes('.mov') || item.imageUrl.includes('.mp4')));
 
-  // Prepara a URL otimizada se for vídeo
   const videoSource = isVideo ? getOptimizedVideoUrl(item.imageUrl) : null;
 
-  // Hook do Player (expo-video)
   const player = useVideoPlayer(videoSource, player => {
-    player.loop = true; // Loop ativado para evitar paradas bruscas
+    player.loop = true; 
     player.muted = false;
   });
 
   useEffect(() => {
-    if (isVideo) {
+    if (isVideo && videoSource) {
       if (isActive) {
         player.play();
       } else {
         player.pause();
       }
     }
-  }, [isActive, isVideo, player]);
+  }, [isActive, isVideo, videoSource, player]);
 
   return (
     <View style={[styles.postContainer, { height: effectiveHeight }]}>
-      {isVideo ? (
+      {isVideo && videoSource ? (
           <View style={styles.fullImage}>
             <VideoView
                 player={player}
                 style={styles.fullImage}
                 contentFit="cover"
                 nativeControls={false}
+                backgroundColor="black" // Garante fundo preto enquanto carrega
             />
-            {/* DIAGNÓSTICO (Remover depois) */}
-            {/* <View style={{ position: 'absolute', top: 100, left: 20, backgroundColor: 'blue', padding: 5 }}>
-               <Text style={{color:'white'}}>Deck V26: {videoSource?.includes('vc_h264') ? 'OK' : 'RAW'}</Text>
-            </View> */}
           </View>
       ) : (
           <Image source={{ uri: item.imageUrl }} style={styles.fullImage} resizeMode="cover" />
@@ -167,7 +160,8 @@ export function FeedUserDeck({
   const { t } = useTranslation();
   const isOwner = user?.id === authorId; 
 
-  const effectiveHeight = customHeight || POST_HEIGHT;
+  // Fallback seguro se customHeight vier 0 ou undefined
+  const effectiveHeight = (customHeight && customHeight > 0) ? customHeight : POST_HEIGHT;
 
   const { data: followingList } = useGetFollowing(user?.id);
   const isFollowing = followingList?.some(u => u.id === authorId) ?? false;
@@ -187,13 +181,13 @@ export function FeedUserDeck({
 
     let actualDuration = DEFAULT_PHOTO_DURATION;
     
-    // V26: Lógica melhorada para detectar se é vídeo na hora de calcular duração
     const isVideo = currentPost.mediaType === MediaType.VIDEO || 
                     currentPost.mediaType === 'video' ||
                     (currentPost.imageUrl && (currentPost.imageUrl.includes('.mp4') || currentPost.imageUrl.includes('.mov')));
 
-    if (isVideo && currentPost.videoDuration) {
-        actualDuration = (currentPost.videoDuration * 1000) + 200;
+    // Verifica se duration existe e é válida
+    if (isVideo && currentPost.videoDuration && !isNaN(Number(currentPost.videoDuration))) {
+        actualDuration = (Number(currentPost.videoDuration) * 1000) + 200;
     }
 
     const animation = Animated.timing(progressAnim, {
