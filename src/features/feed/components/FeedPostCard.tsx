@@ -3,8 +3,26 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { FeedPost, MediaType } from '../services/feedApi';
 import { useTranslation } from 'react-i18next';
+// MUDANÇA V26: Importando o player novo
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 const { width } = Dimensions.get('window');
+
+// --- FUNÇÃO DE OTIMIZAÇÃO (Padrão V26) ---
+const getOptimizedVideoUrl = (url: string) => {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  if (url.includes('vc_h264')) return url;
+
+  let optimized = url.replace(
+    /\/upload\//,
+    '/upload/f_mp4,vc_h264,q_auto:eco,br_1m/'
+  );
+
+  if (optimized.endsWith('.mov')) {
+    optimized = optimized.replace('.mov', '.mp4');
+  }
+  return optimized;
+};
 
 interface FeedPostCardProps {
   post: FeedPost;
@@ -19,8 +37,21 @@ interface FeedPostCardProps {
 export function FeedPostCard({ post, authorName, authorAvatar, onLike, onComment, onDelete, isOwner }: FeedPostCardProps) {
   const { t, i18n } = useTranslation();
   
-  // Data localizada
   const date = new Date(post.createdAt).toLocaleDateString(i18n.language, { day: '2-digit', month: 'short' });
+
+  // --- DETECÇÃO INTELIGENTE V26 ---
+  const isVideo = 
+    post.mediaType === MediaType.VIDEO || 
+    post.mediaType === 'video' || 
+    (post.imageUrl && (post.imageUrl.includes('.mov') || post.imageUrl.includes('.mp4')));
+
+  // Prepara player (mudo e em loop para preview)
+  const videoSource = isVideo ? getOptimizedVideoUrl(post.imageUrl) : null;
+  const player = useVideoPlayer(videoSource, player => {
+    player.loop = true;
+    player.muted = true; // Mudo por padrão em cards de lista
+    // player.play(); // Descomente se quiser autoplay na lista
+  });
 
   return (
     <View style={styles.container}>
@@ -42,12 +73,19 @@ export function FeedPostCard({ post, authorName, authorAvatar, onLike, onComment
       </View>
 
       <View style={styles.mediaContainer}>
-         {/* Nota: Para um card estático na lista, usamos placeholder. 
-             Se precisar de autoplay aqui, use VideoView com controls=false */}
-         {post.mediaType === MediaType.VIDEO ? (
-            <View style={styles.videoPlaceholder}>
-                <Ionicons name="play-circle" size={50} color="white" />
-                <Text style={{color:'white', marginTop: 10}}>{t('video_label')}</Text>
+         {isVideo ? (
+            // AGORA MOSTRA O VÍDEO REAL (V26)
+            <View style={styles.videoContainer}>
+                <VideoView
+                    player={player}
+                    style={styles.image} // Usa mesmo estilo da imagem para preencher
+                    contentFit="cover"
+                    nativeControls={false}
+                />
+                {/* Ícone de Play sobreposto para indicar que é vídeo */}
+                <View style={styles.playIconOverlay}>
+                    <Ionicons name="play-circle" size={40} color="rgba(255,255,255,0.7)" />
+                </View>
             </View>
          ) : (
             <Image source={{ uri: post.imageUrl }} style={styles.image} resizeMode="cover" />
@@ -84,7 +122,8 @@ const styles = StyleSheet.create({
   dateText: { color: '#9CA3AF', fontSize: 12 },
   mediaContainer: { width: '100%', height: width }, 
   image: { width: '100%', height: '100%' },
-  videoPlaceholder: { width: '100%', height: '100%', backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  videoContainer: { width: '100%', height: '100%', backgroundColor: 'black' },
+  playIconOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
   actionsRow: { flexDirection: 'row', padding: 10, gap: 20 },
   actionButton: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   actionText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
