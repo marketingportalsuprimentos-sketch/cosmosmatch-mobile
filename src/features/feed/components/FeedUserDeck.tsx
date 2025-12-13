@@ -6,7 +6,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-// MUDANÇA: Substituído expo-av por expo-video
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { FeedPost, MediaType } from '../services/feedApi';
 import { useAuth } from '../../../contexts/AuthContext'; 
@@ -17,6 +16,24 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TAB_BAR_HEIGHT = 80; 
 const POST_HEIGHT = SCREEN_HEIGHT - TAB_BAR_HEIGHT; 
 const DEFAULT_PHOTO_DURATION = 5000; 
+
+// --- 1. FUNÇÃO DE OTIMIZAÇÃO (V26 - A CORREÇÃO MÁGICA) ---
+const getOptimizedVideoUrl = (url: string) => {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  if (url.includes('vc_h264')) return url;
+
+  // Força conversão para MP4 universal (H.264)
+  let optimized = url.replace(
+    /\/upload\//,
+    '/upload/f_mp4,vc_h264,q_auto:eco,br_1m/'
+  );
+
+  // Troca extensão .mov por .mp4 na string final
+  if (optimized.endsWith('.mov')) {
+    optimized = optimized.replace('.mov', '.mp4');
+  }
+  return optimized;
+};
 
 interface FeedUserDeckProps {
   authorId: string;
@@ -35,7 +52,6 @@ interface FeedUserDeckProps {
   customHeight?: number;
 }
 
-// --- NOVO COMPONENTE EXTRAÍDO PARA SUPORTAR O HOOK useVideoPlayer ---
 const DeckPostItem = ({ 
   item, 
   isActive, 
@@ -51,33 +67,46 @@ const DeckPostItem = ({
   onSharePost 
 }: any) => {
   
+  // --- 2. DETECÇÃO ROBUSTA DE VÍDEO (V26) ---
+  const isVideo = 
+    item.mediaType === MediaType.VIDEO || 
+    item.mediaType === 'video' || 
+    (item.imageUrl && (item.imageUrl.includes('.mov') || item.imageUrl.includes('.mp4')));
+
+  // Prepara a URL otimizada se for vídeo
+  const videoSource = isVideo ? getOptimizedVideoUrl(item.imageUrl) : null;
+
   // Hook do Player (expo-video)
-  // Só inicializa se for vídeo.
-  const player = useVideoPlayer(item.mediaType === MediaType.VIDEO ? item.imageUrl : null, player => {
-    player.loop = false; // Deck geralmente não faz loop infinito no mesmo story, mas pode ajustar se quiser
+  const player = useVideoPlayer(videoSource, player => {
+    player.loop = true; // Loop ativado para evitar paradas bruscas
+    player.muted = false;
   });
 
-  // Efeito para Tocar/Pausar baseado na navegação do deck
   useEffect(() => {
-    if (item.mediaType === MediaType.VIDEO) {
+    if (isVideo) {
       if (isActive) {
         player.play();
       } else {
         player.pause();
-        // Opcional: player.seekBy(-player.currentTime); // Se quiser resetar o vídeo ao sair
       }
     }
-  }, [isActive, item.mediaType, player]);
+  }, [isActive, isVideo, player]);
 
   return (
     <View style={[styles.postContainer, { height: effectiveHeight }]}>
-      {item.mediaType === MediaType.VIDEO ? (
-          <VideoView
-              player={player}
-              style={styles.fullImage}
-              contentFit="cover" // Novo padrão do expo-video (antes era resizeMode)
-              nativeControls={false}
-          />
+      {isVideo ? (
+          <View style={styles.fullImage}>
+            <VideoView
+                player={player}
+                style={styles.fullImage}
+                contentFit="cover"
+                nativeControls={false}
+            />
+            {/* DIAGNÓSTICO (Remover depois) */}
+            {/* <View style={{ position: 'absolute', top: 100, left: 20, backgroundColor: 'blue', padding: 5 }}>
+               <Text style={{color:'white'}}>Deck V26: {videoSource?.includes('vc_h264') ? 'OK' : 'RAW'}</Text>
+            </View> */}
+          </View>
       ) : (
           <Image source={{ uri: item.imageUrl }} style={styles.fullImage} resizeMode="cover" />
       )}
@@ -147,9 +176,6 @@ export function FeedUserDeck({
   const flatListRef = useRef<FlatList>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  // Removido useEffect de Audio.setAudioModeAsync pois expo-av foi removido.
-  // expo-video gerencia o foco de áudio automaticamente.
-
   useEffect(() => {
     if (!isDeckActive || paused) {
       progressAnim.setValue(0);
@@ -160,7 +186,13 @@ export function FeedUserDeck({
     if (!currentPost) return;
 
     let actualDuration = DEFAULT_PHOTO_DURATION;
-    if (currentPost.mediaType === MediaType.VIDEO && currentPost.videoDuration) {
+    
+    // V26: Lógica melhorada para detectar se é vídeo na hora de calcular duração
+    const isVideo = currentPost.mediaType === MediaType.VIDEO || 
+                    currentPost.mediaType === 'video' ||
+                    (currentPost.imageUrl && (currentPost.imageUrl.includes('.mp4') || currentPost.imageUrl.includes('.mov')));
+
+    if (isVideo && currentPost.videoDuration) {
         actualDuration = (currentPost.videoDuration * 1000) + 200;
     }
 
@@ -226,7 +258,6 @@ export function FeedUserDeck({
         data={posts}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => {
-          // Calcula se este post específico é o ativo no deck
           const isActive = isDeckActive && index === currentIndex && !paused;
           
           return (
