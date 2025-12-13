@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as NavigationBar from 'expo-navigation-bar';
+// REMOVIDO: import * as NavigationBar from 'expo-navigation-bar'; (Causa bugs no Android)
 import { useTranslation } from 'react-i18next';
 
 import { useGetFeed, useLikePost, useUnlikePost, useDeletePost } from '../features/feed/hooks/useFeed';
@@ -15,7 +15,10 @@ import { FeedUserDeck } from '../features/feed/components/FeedUserDeck';
 import { FeedCommentSheet } from '../features/feed/components/FeedCommentSheet';
 import { PersonalDayCard } from '../features/feed/components/PersonalDayCard';
 
-const { height: WINDOW_HEIGHT } = Dimensions.get('window');
+// CORREÇÃO CRÍTICA PARA ANDROID:
+// Usamos a altura da janela diretamente. 
+// No Android, evitar cálculos dinâmicos complexos para PagingEnabled previne a tela preta.
+const { height: WINDOW_HEIGHT, width: WINDOW_WIDTH } = Dimensions.get('window');
 
 export function PostsScreen() {
   const navigation = useNavigation<any>();
@@ -23,8 +26,9 @@ export function PostsScreen() {
   const insets = useSafeAreaInsets(); 
   const { t } = useTranslation();
   
-  // CORREÇÃO: Inicializa com a altura da janela para evitar tela preta inicial
-  const [containerHeight, setContainerHeight] = useState(WINDOW_HEIGHT);
+  // No Android, subtraímos a barra de status se ela for translúcida, mas o WINDOW_HEIGHT geralmente já resolve.
+  // Vamos usar uma altura fixa para garantir estabilidade.
+  const ITEM_HEIGHT = WINDOW_HEIGHT;
 
   const { data, isLoading, isError, fetchNextPage, hasNextPage, refetch } = useGetFeed();
   const { mutate: like } = useLikePost();
@@ -39,21 +43,8 @@ export function PostsScreen() {
 
   const verticalListRef = useRef<FlatList>(null);
 
-  // Modo Imersivo no Android
-  useFocusEffect(
-    React.useCallback(() => {
-      const enableImmersiveMode = async () => {
-        if (Platform.OS === 'android') {
-          try {
-            await NavigationBar.setVisibilityAsync('hidden');
-            await NavigationBar.setBehaviorAsync('overlay-swipe');
-            await NavigationBar.setBackgroundColorAsync('#00000000'); 
-          } catch (e) {}
-        }
-      };
-      enableImmersiveMode();
-    }, [])
-  );
+  // REMOVIDO: Modo Imersivo no Android (Causa conflito de layout e tela preta)
+  // useFocusEffect(...)
 
   useFocusEffect(
     useCallback(() => { refetch(); }, [refetch])
@@ -122,16 +113,7 @@ export function PostsScreen() {
   if (isError) return <View style={styles.center}><Text style={{color:'white'}}>{t('error_loading_feed')}</Text></View>;
 
   return (
-    <View 
-      style={styles.container}
-      onLayout={(event) => {
-        const { height } = event.nativeEvent.layout;
-        // Atualiza apenas se houver uma diferença significativa para evitar loops
-        if (Math.abs(containerHeight - height) > 5) {
-            setContainerHeight(height);
-        }
-      }}
-    >
+    <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
       <View 
@@ -144,13 +126,13 @@ export function PostsScreen() {
          <PersonalDayCard />
       </View>
       
-      {/* CORREÇÃO: Removemos a condicional containerHeight > 0 para garantir que renderize */}
       <FlatList
           ref={verticalListRef}
           data={decks}
           keyExtractor={(item, index) => item.author?.id ? `${item.author.id}-${index}` : `deck-${index}`}
           renderItem={({ item, index }) => (
-          <View style={{ height: containerHeight, width: '100%' }}>
+          // CORREÇÃO: Altura explícita igual à ITEM_HEIGHT para garantir paginação correta
+          <View style={{ height: ITEM_HEIGHT, width: WINDOW_WIDTH }}>
               <FeedUserDeck 
                   authorId={item.author?.id}
                   authorName={item.author?.name || t('unknown_user')}
@@ -168,12 +150,12 @@ export function PostsScreen() {
                   onNavigateToProfile={handleNavigateToProfile}
                   onFollowAuthor={handleFollow}
                   onDeletePost={handleDeletePost} 
-                  customHeight={containerHeight}
+                  customHeight={ITEM_HEIGHT}
               />
           </View>
           )}
           pagingEnabled
-          snapToInterval={containerHeight}
+          snapToInterval={ITEM_HEIGHT}
           snapToAlignment="start"
           decelerationRate="fast"
           showsVerticalScrollIndicator={false}
@@ -181,11 +163,11 @@ export function PostsScreen() {
           viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
           onEndReached={() => { if (hasNextPage) fetchNextPage(); }}
           onEndReachedThreshold={1}
-          getItemLayout={(data, index) => ({ length: containerHeight, offset: containerHeight * index, index })}
+          // CORREÇÃO: getItemLayout é crucial para performance e evitar bugs visuais no Android
+          getItemLayout={(data, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
           
           ListEmptyComponent={
-            // CORREÇÃO: Garante que o EmptyState tenha altura mesmo se a lista estiver vazia
-            <View style={[styles.emptyStateContainer, { height: containerHeight }]}>
+            <View style={[styles.emptyStateContainer, { height: ITEM_HEIGHT }]}>
                 <Text style={styles.emptyStateText}>{t('no_posts_found')}</Text>
             </View>
           }
