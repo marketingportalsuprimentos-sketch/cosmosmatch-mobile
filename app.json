@@ -2,7 +2,7 @@
   "expo": {
     "name": "CosmosMatch",
     "slug": "cosmosmatch",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -17,26 +17,19 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cosmosmatch.app",
-      "buildNumber": "33",
+      "buildNumber": "34",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Precisamos da câmara para você tirar fotos para o seu perfil e criar posts.",
-        "NSPhotoLibraryUsageDescription": "Precisamos acessar a sua galeria para você escolher fotos de perfil e posts.",
-        "NSMicrophoneUsageDescription": "Precisamos do microfone para gravar o áudio dos seus vídeos."
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.cosmosmatch.app",
-      "versionCode": 33,
+      "versionCode": 34,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#111827"
-      },
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -63,6 +56,19 @@
             "targetSdkVersion": 35,
             "buildToolsVersion": "35.0.0"
           }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Precisamos acessar a sua galeria para você escolher fotos de perfil e posts.",
+          "cameraPermission": "Precisamos da câmara para você tirar fotos para o seu perfil e criar posts."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Precisamos do microfone para gravar o áudio dos seus vídeos."
         }
       ]
     ],
