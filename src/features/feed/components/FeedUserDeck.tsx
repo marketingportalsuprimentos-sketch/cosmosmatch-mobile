@@ -13,13 +13,10 @@ import { useGetFollowing } from '../../profile/hooks/useProfile';
 import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const TAB_BAR_HEIGHT = 80; 
-const POST_HEIGHT = SCREEN_HEIGHT - TAB_BAR_HEIGHT; 
 const DEFAULT_PHOTO_DURATION = 5000; 
 
-// --- FUNÇÃO DE OTIMIZAÇÃO ---
 const getOptimizedVideoUrl = (url: string) => {
-  if (!url) return null; // Retorna null se url for undefined/empty
+  if (!url) return null;
   if (!url.includes('cloudinary.com')) return url;
   if (url.includes('vc_h264')) return url;
 
@@ -97,7 +94,7 @@ const DeckPostItem = ({
                 style={styles.fullImage}
                 contentFit="cover"
                 nativeControls={false}
-                backgroundColor="black" // Garante fundo preto enquanto carrega
+                backgroundColor="black"
             />
           </View>
       ) : (
@@ -160,8 +157,7 @@ export function FeedUserDeck({
   const { t } = useTranslation();
   const isOwner = user?.id === authorId; 
 
-  // Fallback seguro se customHeight vier 0 ou undefined
-  const effectiveHeight = (customHeight && customHeight > 0) ? customHeight : POST_HEIGHT;
+  const effectiveHeight = (customHeight && customHeight > 0) ? customHeight : SCREEN_HEIGHT;
 
   const { data: followingList } = useGetFollowing(user?.id);
   const isFollowing = followingList?.some(u => u.id === authorId) ?? false;
@@ -185,7 +181,6 @@ export function FeedUserDeck({
                     currentPost.mediaType === 'video' ||
                     (currentPost.imageUrl && (currentPost.imageUrl.includes('.mp4') || currentPost.imageUrl.includes('.mov')));
 
-    // Verifica se duration existe e é válida
     if (isVideo && currentPost.videoDuration && !isNaN(Number(currentPost.videoDuration))) {
         actualDuration = (Number(currentPost.videoDuration) * 1000) + 200;
     }
@@ -289,11 +284,13 @@ const styles = StyleSheet.create({
   progressBarBg: { flex: 1, height: '100%', backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2 },
   progressBarFill: { height: '100%', backgroundColor: 'white', borderRadius: 2 },
 
-  header: { position: 'absolute', top: 85, left: 15, zIndex: 30, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', padding: 6, borderRadius: 20 },
+  // AJUSTE 1: Desci um pouco o cabeçalho (top 100) para separar da barra de progresso e do card de dia pessoal
+  header: { position: 'absolute', top: 100, left: 15, zIndex: 30, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', padding: 6, borderRadius: 20 },
   avatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: 'white', marginRight: 10 },
   authorName: { color: 'white', fontWeight: 'bold', fontSize: 18, textShadowColor: 'black', textShadowRadius: 3, marginRight: 4 },
 
-  rightActions: { position: 'absolute', right: 10, bottom: 50, alignItems: 'center', zIndex: 20, gap: 20 },
+  // AJUSTE 2: Subi os botões (bottom 120) para não cortar na TabBar
+  rightActions: { position: 'absolute', right: 10, bottom: 120, alignItems: 'center', zIndex: 20, gap: 20 },
   actionButton: { alignItems: 'center' },
   actionLabel: { color: 'white', fontSize: 12, fontWeight: '600', marginTop: 2, textShadowColor: 'black', textShadowRadius: 3 },
   
@@ -301,6 +298,7 @@ const styles = StyleSheet.create({
   iconCircle: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', borderRadius: 20, borderWidth: 1, borderColor: '#EF4444' }, 
   plusBadge: { position: 'absolute', bottom: -5, backgroundColor: '#EF4444', borderRadius: 8, width: 16, height: 16, justifyContent: 'center', alignItems: 'center' },
 
-  bottomInfo: { position: 'absolute', bottom: 20, left: 15, right: 80, zIndex: 20 },
+  // AJUSTE 3: Subi a legenda (bottom 120) para alinhar com o início dos botões
+  bottomInfo: { position: 'absolute', bottom: 120, left: 15, right: 80, zIndex: 20 },
   caption: { color: 'white', fontSize: 14, marginBottom: 10, textShadowColor: 'black', textShadowRadius: 3 },
 });
