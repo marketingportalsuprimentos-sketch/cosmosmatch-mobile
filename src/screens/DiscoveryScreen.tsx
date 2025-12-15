@@ -17,7 +17,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as NavigationBar from 'expo-navigation-bar';
 import { useTranslation } from 'react-i18next';
 
 import { useDiscoveryQueue } from '../features/discovery/hooks/useDiscoveryQueue';
@@ -28,8 +27,9 @@ import { api } from '../services/api';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.92;
 
-// --- AJUSTE DE ALTURA (10% MAIOR NO ANDROID) ---
-const CARD_HEIGHT = Platform.OS === 'android' ? SCREEN_HEIGHT * 0.68 : SCREEN_HEIGHT * 0.62;
+// --- AJUSTE DE ALTURA (Corrigido para evitar sobreposição no iOS) ---
+// Reduzi levemente no iOS (0.58) para garantir que caiba entre a barra e o footer
+const CARD_HEIGHT = Platform.OS === 'android' ? SCREEN_HEIGHT * 0.68 : SCREEN_HEIGHT * 0.58;
 
 const CustomToast = ({ message, visible, icon }: { message: string, visible: boolean, icon?: any }) => {
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
@@ -286,6 +286,11 @@ export default function DiscoveryScreen() {
     );
   }
 
+  // --- CORREÇÃO DE PADDING NO IOS ---
+  // Se for Android, precisamos do insets.top.
+  // Se for iOS, o SafeAreaView já cuida do notch, então usamos apenas um padding fixo (10) para não duplicar o espaço.
+  const headerPaddingTop = Platform.OS === 'android' ? insets.top + 15 : 10;
+
   return (
     <SafeAreaView style={styles.container}>
       <CustomToast message={toastMessage} visible={toastVisible} icon={toastIcon} />
@@ -297,9 +302,10 @@ export default function DiscoveryScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 30}
       >
         
+        {/* Barra de Busca com Padding Ajustado */}
         <View style={[
             styles.searchWrapper, 
-            { paddingTop: Platform.OS === 'android' ? insets.top + 15 : Math.max(insets.top - 5, 10) }
+            { paddingTop: headerPaddingTop }
         ]}>
             <View style={styles.headerContainer}>
               <View style={styles.inputWrapper}>
@@ -311,7 +317,7 @@ export default function DiscoveryScreen() {
             {suggestions.length > 0 && (
               <View style={[
                   styles.suggestionsList, 
-                  { top: Platform.OS === 'android' ? insets.top + 70 : insets.top + 55 }
+                  { top: headerPaddingTop + 55 }
               ]}>
                 {suggestions.map((item, i) => (
                   <TouchableOpacity key={i} style={styles.suggestionItem} onPress={() => selectSuggestion(item)}><Text style={{color:'#D1D5DB'}}>{item}</Text></TouchableOpacity>
@@ -321,7 +327,8 @@ export default function DiscoveryScreen() {
         </View>
 
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.contentContainer}>
+            {/* Adicionei marginTop para afastar o card da barra */}
+            <View style={[styles.contentContainer, { marginTop: 10 }]}>
               {(isLoading || isSearching) && <ActivityIndicator size="large" color="#8B5CF6" />}
               {!isLoading && !isSearching && isQueueEmpty && (
                  <View style={{alignItems: 'center'}}>
