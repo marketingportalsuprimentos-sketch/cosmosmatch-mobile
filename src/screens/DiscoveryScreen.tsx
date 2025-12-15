@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, Text, StyleSheet, ActivityIndicator, SafeAreaView, 
+import {
+  View, Text, StyleSheet, ActivityIndicator, SafeAreaView,
   TouchableOpacity, TextInput, Dimensions, Image, Keyboard, KeyboardAvoidingView, Platform, Alert,
   TouchableWithoutFeedback, Animated as RNAnimated, StatusBar
 } from 'react-native';
@@ -21,15 +21,16 @@ import { useTranslation } from 'react-i18next';
 
 import { useDiscoveryQueue } from '../features/discovery/hooks/useDiscoveryQueue';
 import { useDiscoveryMutations } from '../features/discovery/hooks/useDiscoveryMutations';
-import { useFollowUser } from '../features/profile/hooks/useProfile'; 
-import { api } from '../services/api'; 
+import { useFollowUser } from '../features/profile/hooks/useProfile';
+import { api } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.92;
 
-// --- AJUSTE DE ALTURA (Corrigido para evitar sobreposição no iOS) ---
-// Reduzi levemente no iOS (0.58) para garantir que caiba entre a barra e o footer
-const CARD_HEIGHT = Platform.OS === 'android' ? SCREEN_HEIGHT * 0.68 : SCREEN_HEIGHT * 0.58;
+// --- AJUSTE DE ALTURA FINAL ---
+// Android: 0.68 (Mantido como você pediu, pois estava bom)
+// iOS: 0.64 (Aumentado para preencher melhor a tela)
+const CARD_HEIGHT = Platform.OS === 'android' ? SCREEN_HEIGHT * 0.68 : SCREEN_HEIGHT * 0.64;
 
 const CustomToast = ({ message, visible, icon }: { message: string, visible: boolean, icon?: any }) => {
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
@@ -45,8 +46,8 @@ const CustomToast = ({ message, visible, icon }: { message: string, visible: boo
   );
 };
 
-function DiscoveryCard({ 
-    profile, onSwipeRight, onSwipeLeft, onSearchTap, isKeyboardVisible, activeInput, onConnectPress, isConnected, onNamePress 
+function DiscoveryCard({
+    profile, onSwipeRight, onSwipeLeft, onSearchTap, isKeyboardVisible, activeInput, onConnectPress, isConnected, onNamePress
 }: any) {
   const { t } = useTranslation();
   const translateX = useSharedValue(0);
@@ -112,9 +113,9 @@ function DiscoveryCard({
                 <Ionicons name="location-sharp" size={16} color="#E5E7EB" />
                 <Text style={styles.locationText} numberOfLines={1}>{city}</Text>
              </View>
-             <TouchableOpacity 
-                style={[styles.connectButton, isConnected && styles.likedButton]} 
-                onPress={onConnectPress} activeOpacity={0.9} disabled={isConnected} 
+             <TouchableOpacity
+                style={[styles.connectButton, isConnected && styles.likedButton]}
+                onPress={onConnectPress} activeOpacity={0.9} disabled={isConnected}
              >
                 <Ionicons name={isConnected ? "checkmark-circle" : "person-add"} size={20} color="white" style={{marginRight: 8}} />
                 <Text style={styles.connectButtonText}>
@@ -133,13 +134,13 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
   const [msg, setMsg] = useState('');
   const [localLoading, setLocalLoading] = useState(false);
 
-  const handleSend = async () => { 
-      if (!msg.trim() || localLoading || isProcessing) return; 
+  const handleSend = async () => {
+      if (!msg.trim() || localLoading || isProcessing) return;
       setLocalLoading(true);
       try {
-          await onSendMessage(msg); 
-          setMsg(''); 
-          Keyboard.dismiss(); 
+          await onSendMessage(msg);
+          setMsg('');
+          Keyboard.dismiss();
       } catch (error) {
       } finally {
           setLocalLoading(false);
@@ -152,19 +153,19 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
             <Ionicons name="close" size={26} color="#9CA3AF" />
         </TouchableOpacity>
         <View style={styles.messageInputPill}>
-          <TextInput 
-            style={styles.inputMessage} 
-            placeholder={t('send_message_placeholder')} 
-            placeholderTextColor="#6B7280" 
-            value={msg} 
-            onChangeText={setMsg} 
-            onFocus={onFocusMsg} 
-            onSubmitEditing={handleSend} 
-            returnKeyType="send" 
+          <TextInput
+            style={styles.inputMessage}
+            placeholder={t('send_message_placeholder')}
+            placeholderTextColor="#6B7280"
+            value={msg}
+            onChangeText={setMsg}
+            onFocus={onFocusMsg}
+            onSubmitEditing={handleSend}
+            returnKeyType="send"
           />
-          <TouchableOpacity 
-            style={[styles.sendIconBubble, { opacity: msg.trim() ? 1 : 0.5 }]} 
-            onPress={handleSend} 
+          <TouchableOpacity
+            style={[styles.sendIconBubble, { opacity: msg.trim() ? 1 : 1 }]}
+            onPress={handleSend}
             disabled={!msg.trim() || isProcessing || localLoading}
           >
              {localLoading ? (
@@ -183,7 +184,7 @@ function ActionFooter({ onSkip, onLike, onSendMessage, isProcessing, onFocusMsg,
 
 export default function DiscoveryScreen() {
   const navigation = useNavigation<any>();
-  const insets = useSafeAreaInsets(); 
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
   const [citySearch, setCitySearch] = useState('');
@@ -193,7 +194,7 @@ export default function DiscoveryScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [activeInput, setActiveInput] = useState<'city' | 'message' | null>(null);
-  
+
   const lastSearchRef = useRef('');
   const [isLikedCurrent, setIsLikedCurrent] = useState(false);
   const [isConnectedCurrent, setIsConnectedCurrent] = useState(false);
@@ -201,9 +202,9 @@ export default function DiscoveryScreen() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastIcon, setToastIcon] = useState('heart');
 
-  const showToast = (message: string, icon: string = 'heart') => { 
-      setToastMessage(message); setToastIcon(icon); setToastVisible(true); 
-      setTimeout(() => setToastVisible(false), 2500); 
+  const showToast = (message: string, icon: string = 'heart') => {
+      setToastMessage(message); setToastIcon(icon); setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 2500);
   };
 
   useEffect(() => {
@@ -217,19 +218,19 @@ export default function DiscoveryScreen() {
   useEffect(() => { setIsLikedCurrent(false); setIsConnectedCurrent(false); }, [currentProfile?.userId]);
 
   const { like, sendIcebreaker, likeStatus } = useDiscoveryMutations();
-  const { mutate: followUser } = useFollowUser(); 
+  const { mutate: followUser } = useFollowUser();
   const isProcessing = likeStatus === 'pending';
 
   const handleOpenSearch = () => { navigation.navigate('SearchUsers'); };
   const handleGoToProfile = () => { if (currentProfile) navigation.navigate('PublicProfile', { userId: currentProfile.userId }); };
 
   const searchCity = async (text: string) => {
-    setCitySearch(text); lastSearchRef.current = text; 
+    setCitySearch(text); lastSearchRef.current = text;
     if (text.length === 0) { setLocationFilter(null); setSelectedCityName(undefined); }
     if (text.length > 2) {
-      try { 
-          const { data } = await api.get<string[]>('/profile/autocomplete', { params: { input: text } }); 
-          if (lastSearchRef.current === text) setSuggestions(data || []); 
+      try {
+          const { data } = await api.get<string[]>('/profile/autocomplete', { params: { input: text } });
+          if (lastSearchRef.current === text) setSuggestions(data || []);
       } catch (e) {}
     } else { setSuggestions([]); }
   };
@@ -243,14 +244,14 @@ export default function DiscoveryScreen() {
     try {
       const { data } = await api.get('/profile/geocode', { params: { city: cityToSearch } });
       if (data.lat && data.lng) { setLocationFilter(data); setSelectedCityName(cityToSearch); }
-    } catch (e) { Alert.alert(t('error'), t('error_city_not_found')); setLocationFilter(null); setSelectedCityName(undefined); } 
+    } catch (e) { Alert.alert(t('error'), t('error_city_not_found')); setLocationFilter(null); setSelectedCityName(undefined); }
     finally { setIsSearching(false); }
   };
 
   const handleLikePress = async () => {
     if (!currentProfile) return;
     setIsLikedCurrent(true); showToast(t('toast_like_sent'), "heart");
-    try { await like(currentProfile.userId); setTimeout(() => removeCurrentProfile(), 500); } 
+    try { await like(currentProfile.userId); setTimeout(() => removeCurrentProfile(), 500); }
     catch (error) { setIsLikedCurrent(false); Alert.alert(t('error'), t('error_like_failed')); }
   };
 
@@ -268,8 +269,8 @@ export default function DiscoveryScreen() {
     try {
         await sendIcebreaker({ userId: currentProfile.userId, content: message });
         showToast(t('toast_message_sent'), "paper-plane");
-    } catch (error: any) { 
-        if (error?.response?.status === 402) throw error; 
+    } catch (error: any) {
+        if (error?.response?.status === 402) throw error;
         Alert.alert(t('error'), t('error_send_failed')); throw error;
     }
   };
@@ -287,24 +288,22 @@ export default function DiscoveryScreen() {
   }
 
   // --- CORREÇÃO DE PADDING NO IOS ---
-  // Se for Android, precisamos do insets.top.
-  // Se for iOS, o SafeAreaView já cuida do notch, então usamos apenas um padding fixo (10) para não duplicar o espaço.
   const headerPaddingTop = Platform.OS === 'android' ? insets.top + 15 : 10;
 
   return (
     <SafeAreaView style={styles.container}>
       <CustomToast message={toastMessage} visible={toastVisible} icon={toastIcon} />
-      
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={{flex: 1}} 
-        enabled={activeInput === 'message'} 
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{flex: 1}}
+        enabled={activeInput === 'message'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 30}
       >
-        
-        {/* Barra de Busca com Padding Ajustado */}
+
+        {/* Barra de Busca */}
         <View style={[
-            styles.searchWrapper, 
+            styles.searchWrapper,
             { paddingTop: headerPaddingTop }
         ]}>
             <View style={styles.headerContainer}>
@@ -316,7 +315,7 @@ export default function DiscoveryScreen() {
             </View>
             {suggestions.length > 0 && (
               <View style={[
-                  styles.suggestionsList, 
+                  styles.suggestionsList,
                   { top: headerPaddingTop + 55 }
               ]}>
                 {suggestions.map((item, i) => (
@@ -327,7 +326,7 @@ export default function DiscoveryScreen() {
         </View>
 
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            {/* Adicionei marginTop para afastar o card da barra */}
+            {/* Card Principal */}
             <View style={[styles.contentContainer, { marginTop: 10 }]}>
               {(isLoading || isSearching) && <ActivityIndicator size="large" color="#8B5CF6" />}
               {!isLoading && !isSearching && isQueueEmpty && (
@@ -339,11 +338,11 @@ export default function DiscoveryScreen() {
                  </View>
               )}
               {!isLoading && !isSearching && currentProfile && (
-                <DiscoveryCard 
-                    key={currentProfile.userId} profile={currentProfile} 
-                    onSwipeRight={handleSwipeAction} onSwipeLeft={handleSwipeAction} 
-                    onSearchTap={handleOpenSearch} onConnectPress={handleConnectPress} 
-                    isConnected={isConnectedCurrent} onNamePress={handleGoToProfile} 
+                <DiscoveryCard
+                    key={currentProfile.userId} profile={currentProfile}
+                    onSwipeRight={handleSwipeAction} onSwipeLeft={handleSwipeAction}
+                    onSearchTap={handleOpenSearch} onConnectPress={handleConnectPress}
+                    isConnected={isConnectedCurrent} onNamePress={handleGoToProfile}
                     isKeyboardVisible={isKeyboardVisible} activeInput={activeInput}
                 />
               )}
@@ -385,7 +384,7 @@ const styles = StyleSheet.create({
   connectButton: { backgroundColor: '#6366F1', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 14, borderRadius: 14, width: '100%', shadowColor: "#6366F1", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 5 },
   likedButton: { backgroundColor: '#374151', borderWidth: 1, borderColor: '#A855F7', shadowColor: "transparent" },
   connectButtonText: { color: 'white', fontSize: 17, fontWeight: 'bold' },
-  footerContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 10, height: 80, zIndex: 100, elevation: 100, backgroundColor: '#111827' },
+  footerContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 25, height: 90, zIndex: 100, elevation: 100, backgroundColor: '#111827' },
   circleButton: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(31, 41, 55, 0.5)', borderWidth: 1, borderColor: '#374151' },
   messageInputPill: { flex: 1, marginHorizontal: 12, height: 50, borderRadius: 25, backgroundColor: '#1F2937', borderWidth: 1, borderColor: '#374151', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, justifyContent: 'space-between' },
   inputMessage: { flex: 1, color: 'white', marginLeft: 10, height: '100%' },
