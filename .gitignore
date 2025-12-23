@@ -50,3 +50,4 @@ yarn-error.*
 .vs/slnx.sqlite
 .vs/mobile.slnx/FileContentIndex/d9ac0ca1-eef6-4f3e-996e-adfe4071e2b6.vsidx
 .vs/mobile.slnx/FileContentIndex/fa741602-9407-4b3d-a29f-9f1c34582512.vsidx
+*.vsidx
