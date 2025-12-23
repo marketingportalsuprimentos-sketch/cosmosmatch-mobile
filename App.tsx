@@ -1,3 +1,5 @@
+// mobile/App.tsx
+
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
@@ -41,9 +43,9 @@ import { navigationRef } from './src/navigation/navigationRef';
 
 import './src/i18n'; 
 
-// === CONFIGURAÇÃO DE REGRAS ===
-const GRACE_PERIOD_HOURS = 36; // Bloqueia após 36 horas
-const NEW_REGISTRATION_MINUTES = 5; // Considera "Novo Cadastro" nos primeiros 5 min
+// === CONFIGURAÇÃO DE REGRAS (ATUALIZADO PARA 72H) ===
+const GRACE_PERIOD_HOURS = 72; // Agora igual à Web
+const NEW_REGISTRATION_MINUTES = 5; 
 
 const queryClient = new QueryClient();
 const Stack = createNativeStackNavigator();
@@ -80,10 +82,9 @@ const AppNavigator = () => {
   let isJustRegistered = false;
 
   if (user) {
-    const isVerified = (user as any).emailVerified === true;
+    const isVerified = (user as any).emailVerified === true || (user as any).verified === true;
 
     if (!isVerified) {
-      // Calcula tempos
       const createdAt = (user as any).createdAt ? new Date((user as any).createdAt) : new Date();
       const now = new Date();
       const diffInMs = now.getTime() - createdAt.getTime();
@@ -95,7 +96,7 @@ const AppNavigator = () => {
         isJustRegistered = true;
       }
       
-      // REGRA 2 (Bloqueio): Se passou de 36h, bloqueia
+      // REGRA 2 (Bloqueio): Se passou de 72h, bloqueia
       if (diffInHours > GRACE_PERIOD_HOURS) {
         isBlocked = true;
       }
@@ -107,33 +108,34 @@ const AppNavigator = () => {
       {user ? (
         // === USUÁRIO LOGADO ===
         isBlocked ? (
-          // CENÁRIO: BLOQUEADO (> 36h)
+          // CENÁRIO: BLOQUEADO (> 72h)
           // Só vê a tela de verificação
           <>
-            <Stack.Screen name="PleaseVerify" component={PleaseVerifyScreen} />
+            <Stack.Screen name="PleaseVerifyScreen" component={PleaseVerifyScreen} />
             {/* Deixamos EditProfile acessível caso precise corrigir o email */}
             <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} options={{ animation: 'slide_from_bottom' }} /> 
           </>
         ) : (
-          // CENÁRIO: LIBERADO (Verificado ou < 36h)
+          // CENÁRIO: LIBERADO (Verificado ou < 72h)
           <>
             {/* LÓGICA DE PRIORIDADE DA TELA INICIAL */}
             
             {isJustRegistered ? (
                // Se acabou de cadastrar: 1º Tela é Verificação -> Continuar -> EditProfile
-               <Stack.Screen name="PleaseVerify" component={PleaseVerifyScreen} />
+               // IMPORTANTE: MainTabs TAMBÉM é registrado aqui para que o reset funcione
+               <>
+                 <Stack.Screen name="PleaseVerifyScreen" component={PleaseVerifyScreen} />
+                 <Stack.Screen name="MainTabs" component={AppTabs} />
+               </>
             ) : (
                // Se é login normal: 1º Tela é Descoberta
-               <Stack.Screen name="MainTabs" component={AppTabs} />
+               <>
+                 <Stack.Screen name="MainTabs" component={AppTabs} />
+                 <Stack.Screen name="PleaseVerifyScreen" component={PleaseVerifyScreen} />
+               </>
             )}
 
             {/* Definimos as rotas restantes para a navegação funcionar */}
-            
-            {isJustRegistered ? (
-               <Stack.Screen name="MainTabs" component={AppTabs} />
-            ) : (
-               <Stack.Screen name="PleaseVerify" component={PleaseVerifyScreen} />
-            )}
             
             <Stack.Screen name="ChatConversation" component={ChatConversationScreen} options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} options={{ animation: 'slide_from_bottom' }} /> 

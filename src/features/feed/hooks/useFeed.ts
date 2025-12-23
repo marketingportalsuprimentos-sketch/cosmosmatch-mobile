@@ -1,36 +1,41 @@
-// mobile/src/features/feed/hooks/useFeed.ts
+// src/features/feed/hooks/useFeed.ts
 
 import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
   useQuery,
-  type InfiniteData,
+  InfiniteData,
 } from '@tanstack/react-query';
-import { Alert, Keyboard } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { Alert } from 'react-native';
 import * as feedApi from '../services/feedApi';
+// --- IMPORTANTE: Ajuste o caminho se necessário para apontar para sua API de Profile ---
+import { followUser, unfollowUser } from '../../profile/services/profileApi'; 
 import { chatApi } from '../../chat/services/chatApi'; 
-import type { FeedDeck } from '../services/feedApi'; 
-import { api } from '../../../services/api';
-import { useAuth } from '../../../contexts/AuthContext'; // <--- 1. Importei o Auth
+import { FeedDeck } from '@/types/feed.types';
+import { api } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const useGetFeed = () => {
-  const { user } = useAuth(); // <--- 2. Pegamos o usuário logado
+  const { user } = useAuth();
 
   return useInfiniteQuery({
-    // 3. A MÁGICA: A chave agora inclui o ID. 
-    // Se mudar de usuário, o React Query cria uma lista nova em folha (zero mistura).
-    queryKey: ['feed', user?.id], 
-    
-    queryFn: ({ pageParam }) => feedApi.getFeedPage(pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, allPages) => {
-      if (!lastPage || !lastPage.posts || lastPage.posts.length === 0) return undefined;
-      return allPages.length + 1;
+    queryKey: ['feed', user?.id],
+    queryFn: async ({ pageParam = 0 }) => {
+      // O feedApi agora retorna FeedDeck[] (Array), garantido
+      const data = await feedApi.getFeed({ skip: pageParam, take: 2 });
+      return data;
     },
-    // Só busca se tiver usuário logado
-    enabled: !!user?.id, 
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      // Como agora é um array, verificamos o tamanho dele
+      if (!lastPage || lastPage.length === 0) {
+        return undefined;
+      }
+      return allPages.length * 2; // Multiplicamos pelo 'take' ou apenas retornamos o tamanho acumulado
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 5, 
   });
 };
 
@@ -39,55 +44,58 @@ export const useCreatePost = () => {
   return useMutation({
     mutationFn: (formData: FormData) => feedApi.createPost(formData),
     onSuccess: () => {
-      // Invalida qualquer coisa que comece com 'feed' (atualiza pra todo mundo)
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
       Alert.alert('Sucesso', 'Post criado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
-    onError: (error) => {
-      console.error('Erro ao criar post:', error);
-      Alert.alert('Erro', 'Não foi possível criar o post.');
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message || 'Não foi possível criar o post.';
+      Alert.alert('Erro', msg);
     },
   });
 };
 
+// --- LOGICA DE LIKE (Já existia e funcionava) ---
 export const useLikePost = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth(); // Pegamos o user para saber qual cache atualizar
+  const { user } = useAuth();
 
   return useMutation({
-    mutationFn: (postId: string) => feedApi.likePost(postId),
-    onMutate: async (postId: string) => {
-      // Cancela queries específicas do usuário atual
+    mutationFn: feedApi.likePost,
+    onMutate: async (postId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
-      
-      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck | null>>(feedKey);
-      
-      queryClient.setQueryData<InfiniteData<FeedDeck | null>>(feedKey, (oldFeed) => {
-          if (!oldFeed) return oldFeed;
-          return {
-            ...oldFeed,
-            pages: oldFeed.pages.map((page) => {
-              if (!page) return page;
+      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(feedKey);
+
+      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(feedKey, (old) => {
+        if (!old || !old.pages) return old;
+        const newPages = old.pages.map((page) => {
+           // page é FeedDeck[]
+           return page.map(deck => {
+              const postExists = deck.posts.some(p => p.id === postId);
+              if (!postExists) return deck;
               return {
-                ...page,
-                posts: page.posts.map((post) => {
+                ...deck,
+                posts: deck.posts.map((post) => {
                   if (post.id === postId) {
-                    return { ...post, isLikedByMe: true, likesCount: post.likesCount + 1 };
+                    return { 
+                      ...post, 
+                      isLikedByMe: true, 
+                      likesCount: post.isLikedByMe ? post.likesCount : post.likesCount + 1 
+                    };
                   }
                   return post;
                 }),
               };
-            }),
-          };
+           });
+        });
+        return { ...old, pages: newPages };
       });
       return { previousFeed };
     },
-    onError: (err, postId, context) => {
+    onError: (err, newPost, context) => {
       if (context?.previousFeed) {
         queryClient.setQueryData(['feed', user?.id], context.previousFeed);
       }
-      console.log('Erro ao curtir:', err);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
@@ -100,43 +108,153 @@ export const useUnlikePost = () => {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: (postId: string) => feedApi.unlikePost(postId),
-    onMutate: async (postId: string) => {
+    mutationFn: feedApi.unlikePost,
+    onMutate: async (postId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
-      
-      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck | null>>(feedKey);
-      
-      queryClient.setQueryData<InfiniteData<FeedDeck | null>>(feedKey, (oldFeed) => {
-          if (!oldFeed) return oldFeed;
-          return {
-            ...oldFeed,
-            pages: oldFeed.pages.map((page) => {
-              if (!page) return page;
-              return {
-                ...page,
-                posts: page.posts.map((post) => {
-                  if (post.id === postId) {
-                    return { ...post, isLikedByMe: false, likesCount: Math.max(0, post.likesCount - 1) };
-                  }
-                  return post;
-                }),
-              };
-            }),
-          };
+      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(feedKey);
+
+      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(feedKey, (old) => {
+        if (!old || !old.pages) return old;
+        const newPages = old.pages.map((page) => {
+            return page.map(deck => {
+                const postExists = deck.posts.some(p => p.id === postId);
+                if (!postExists) return deck;
+                return {
+                  ...deck,
+                  posts: deck.posts.map((post) => {
+                    if (post.id === postId) {
+                      return { 
+                        ...post, 
+                        isLikedByMe: false, 
+                        likesCount: Math.max(0, post.isLikedByMe ? post.likesCount - 1 : post.likesCount)
+                      };
+                    }
+                    return post;
+                  }),
+                };
+            });
+        });
+        return { ...old, pages: newPages };
       });
       return { previousFeed };
     },
+    onError: (err, newPost, context) => {
+      if (context?.previousFeed) {
+        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
+      }
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+    }
+  });
+};
+
+// --- NOVA LÓGICA: SEGUIR PELO FEED (ATUALIZAÇÃO OTIMISTA) ---
+export const useFollowAuthorInFeed = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: (authorId: string) => followUser(authorId), // Usa a API de profile
+    onMutate: async (authorId) => {
+      const feedKey = ['feed', user?.id];
+      
+      // 1. Cancela refetchs em andamento
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      
+      // 2. Guarda o estado anterior
+      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(feedKey);
+
+      // 3. Atualiza o cache manualment (Isso é o que "Segura" o botão)
+      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(feedKey, (old) => {
+        if (!old || !old.pages) return old;
+        
+        const newPages = old.pages.map((page) => {
+           // Percorre todos os decks da pagina
+           return page.map(deck => {
+             // Se achou o autor que clicamos, força o status para TRUE
+             if (deck.author.id === authorId) {
+                return {
+                    ...deck,
+                    author: {
+                        ...deck.author,
+                        isFollowedByMe: true // <--- A MÁGICA ACONTECE AQUI
+                    }
+                };
+             }
+             return deck;
+           });
+        });
+        return { ...old, pages: newPages };
+      });
+
+      return { previousFeed };
+    },
+    onError: (err, variables, context) => {
+      // Se der erro, volta como estava
+      if (context?.previousFeed) {
+        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
+      }
+      Alert.alert('Erro', 'Não foi possível seguir.');
+    },
+    onSettled: () => {
+      // Sincroniza com o servidor depois
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['following'] }); // Atualiza perfil também
     },
   });
 };
 
+export const useUnfollowAuthorInFeed = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: (authorId: string) => unfollowUser(authorId),
+    onMutate: async (authorId) => {
+      const feedKey = ['feed', user?.id];
+      await queryClient.cancelQueries({ queryKey: feedKey });
+      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(feedKey);
+
+      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(feedKey, (old) => {
+        if (!old || !old.pages) return old;
+        const newPages = old.pages.map((page) => {
+           return page.map(deck => {
+             if (deck.author.id === authorId) {
+                return {
+                    ...deck,
+                    author: {
+                        ...deck.author,
+                        isFollowedByMe: false // <--- Força para FALSE instantaneamente
+                    }
+                };
+             }
+             return deck;
+           });
+        });
+        return { ...old, pages: newPages };
+      });
+
+      return { previousFeed };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousFeed) {
+        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
+      }
+      Alert.alert('Erro', 'Não foi possível deixar de seguir.');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
+    },
+  });
+};
+
+// --- COMENTÁRIOS E DELETE ---
 export const useCommentOnPost = () => {
   const queryClient = useQueryClient();
-  const navigation = useNavigation<any>();
-
+  
   return useMutation({
     mutationFn: async ({ postId, content, authorId }: { postId: string; content: string; authorId?: string }) => {
       const response = await feedApi.commentOnPost(postId, { content });
@@ -147,10 +265,8 @@ export const useCommentOnPost = () => {
                  content: `Comentou no seu post: "${content}"`
              });
           } catch (error: any) {
-             if (error?.response?.status === 402) {
-                 throw error; 
-             }
-             console.log("Erro silencioso ao enviar DM do post:", error);
+             if (error?.response?.status === 402) throw error; 
+             console.log("Chat error:", error);
           }
       }
       return response;
@@ -160,34 +276,6 @@ export const useCommentOnPost = () => {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       if (variables.authorId) queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
-    onError: (error: any) => {
-      Keyboard.dismiss(); 
-
-      if (error?.response?.status === 402) {
-          navigation.navigate('Premium');
-          return;
-      }
-      Alert.alert('Erro', 'Não foi possível enviar o comentário.');
-    },
-  });
-};
-
-export const useDeletePostComment = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (commentId: string) => {
-      await api.delete(`/post/comment/${commentId}`);
-    },
-    onSuccess: (_, commentId) => {
-      Alert.alert('Sucesso', 'Comentário apagado.');
-      queryClient.invalidateQueries({ queryKey: ['postComments'] });
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
-    },
-    onError: (error: any) => {
-      console.log('Erro ao deletar:', error);
-      const msg = error.response?.data?.message || 'Não foi possível apagar.';
-      Alert.alert('Erro', msg);
-    }
   });
 };
 
@@ -199,14 +287,32 @@ export const useGetPostComments = (postId: string | null) => {
   });
 };
 
+export const useDeletePostComment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (commentId: string) => {
+      await api.delete(`/post/comment/${commentId}`);
+    },
+    onSuccess: () => {
+      Alert.alert('Sucesso', 'Comentário apagado.');
+      queryClient.invalidateQueries({ queryKey: ['postComments'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Não foi possível apagar.';
+      Alert.alert('Erro', msg);
+    }
+  });
+};
+
 export const useDeletePost = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (postId: string) => feedApi.deletePost(postId),
+    mutationFn: feedApi.deletePost,
     onSuccess: () => {
       Alert.alert('Sucesso', 'Post apagado.');
       queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
-    onError: () => Alert.alert('Erro', 'Não foi possível apagar.'),
+    onError: () => Alert.alert('Erro', 'Não foi possível apagar post.'),
   });
 };

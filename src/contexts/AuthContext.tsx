@@ -23,6 +23,7 @@ export interface AuthContextType {
   setUser: Dispatch<SetStateAction<AuthUser | null>>;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  reactivateAccount: (credentials: { email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   signOut: () => Promise<void>; 
   incrementFreeContactsUsed: () => void;
@@ -37,7 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // 1. Validação Inicial do Token
+  // 1. Validação Inicial do Token (CORRIGIDA)
   useEffect(() => {
     let isMounted = true;
     const validateToken = async () => {
@@ -48,12 +49,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         let fetchedUser: AuthUser | null = null;
         if (token) {
           try {
+            // Tenta pegar o perfil do usuário
             const response = await api.get<AuthUser>('/auth/profile');
             fetchedUser = response.data;
-            console.log('Auth: Token validado para', fetchedUser.username);
-          } catch (error) {
-            console.log('Auth: Token inválido. Limpando...');
-            await storage.removeToken();
+            console.log('Auth: Token validado com sucesso para', fetchedUser.username);
+          } catch (error: any) {
+            console.error('Auth: Erro ao validar token:', error.message);
+            
+            // [CORREÇÃO CRÍTICA]: Incluído erro 404 na lista de logout forçado.
+            // Se for 401 (Não autorizado), 403 (Proibido) OU 404 (Usuário deletado/não encontrado)
+            if (
+                error.response?.status === 401 || 
+                error.response?.status === 403 || 
+                error.response?.status === 404
+            ) {
+                console.log(`Auth: Sessão inválida (${error.response?.status}). Realizando logout...`);
+                await storage.removeToken();
+                fetchedUser = null;
+            } else {
+                console.log('Auth: Erro genérico (Rede/Servidor). Mantendo sessão ativa preventivamente.');
+            }
           }
         }
 
@@ -61,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUserState(fetchedUser);
         }
       } catch (err) {
-        console.error('Erro na validação:', err);
+        console.error('Erro fatal na validação:', err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -117,9 +132,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user, socket]);
 
-  // --- 3. LOGIN (COM LIMPEZA PREVENTIVA) ---
+  // --- 3. LOGIN ---
   const signIn = useCallback(async (email, password) => {
-    // Segurança Extra: Garante que o cache está vazio antes de logar novo usuário
     queryClient.clear();
     queryClient.removeQueries();
 
@@ -130,26 +144,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUserState(user);
   }, [queryClient]);
 
-  // --- 4. LOGOUT (LIMPEZA AGRESSIVA) ---
+  // --- 3.1. REATIVAR CONTA ---
+  const reactivateAccount = useCallback(async (credentials: { email: string; password: string }) => {
+    queryClient.clear();
+    queryClient.removeQueries();
+
+    const response = await api.post('/auth/reactivate', credentials);
+    const { accessToken, user } = response.data;
+
+    await storage.setToken(accessToken);
+    setUserState(user);
+  }, [queryClient]);
+
+  // --- 4. LOGOUT ---
   const logout = useCallback(async () => {
-    console.log('Auth: Logout... Faxina no Cache.');
+    console.log('Auth: Logout solicitado.');
     
-    // 1. Apaga Token
     await storage.removeToken();
     
-    // 2. Mata o Socket manualmente
     if (socket && socket.connected) {
         socket.disconnect();
     }
     setSocket(null);
 
-    // 3. LIMPEZA TOTAL DO REACT QUERY (AQUI ESTÁ A CORREÇÃO)
-    // clear() reseta o estado interno
     queryClient.clear();
-    // removeQueries() força a remoção de todos os dados cacheados (Feed, Perfil, etc)
     queryClient.removeQueries();
 
-    // 4. Tira o usuário (Navega para Login)
     setUserState(null);
   }, [queryClient, socket]);
 
@@ -159,7 +179,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserState(action);
         } else {
             setUserState(action);
-            // Se for logout via setUser(null), também limpa
             if (!action) {
                 queryClient.clear();
                 queryClient.removeQueries();
@@ -189,6 +208,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser,
     isLoading,
     signIn, 
+    reactivateAccount,
     logout,
     signOut: logout, 
     incrementFreeContactsUsed,

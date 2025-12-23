@@ -1,10 +1,12 @@
+// mobile/src/screens/DiscoveryScreen.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, SafeAreaView,
   TouchableOpacity, TextInput, Dimensions, Image, Keyboard, KeyboardAvoidingView, Platform, Alert,
-  TouchableWithoutFeedback, Animated as RNAnimated, StatusBar
+  TouchableWithoutFeedback, Animated as RNAnimated
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
@@ -24,13 +26,65 @@ import { useDiscoveryMutations } from '../features/discovery/hooks/useDiscoveryM
 import { useFollowUser } from '../features/profile/hooks/useProfile';
 import { api } from '../services/api';
 
+// IMPORT DO AUTH PARA PEGAR O USUÁRIO E O CRIADO_EM
+import { useAuth } from '../contexts/AuthContext';
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH * 0.92;
-
-// --- AJUSTE DE ALTURA FINAL ---
-// Android: 0.68 (Mantido como você pediu, pois estava bom)
-// iOS: 0.64 (Aumentado para preencher melhor a tela)
 const CARD_HEIGHT = Platform.OS === 'android' ? SCREEN_HEIGHT * 0.68 : SCREEN_HEIGHT * 0.64;
+
+// --- COMPONENTE DO ALERTA FLUTUANTE (COM BOTÃO DE AÇÃO) ---
+const EmailVerificationAlert = ({ 
+  user, 
+  isVisible, 
+  onClose, 
+  topOffset,
+  onVerifyPress // Nova função recebida
+}: { 
+  user: any, 
+  isVisible: boolean, 
+  onClose: () => void, 
+  topOffset: number,
+  onVerifyPress: () => void 
+}) => {
+  const { t } = useTranslation();
+  
+  if (!isVisible || user?.emailVerified) return null;
+
+  const createdAt = new Date(user?.createdAt);
+  const now = new Date();
+  const diffHours = Math.abs(now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+  const hoursLeft = 72 - diffHours;
+
+  if (hoursLeft <= 0) return null; 
+
+  return (
+    <View style={[styles.floatingAlert, { top: topOffset }]}>
+      <View style={styles.alertContent}>
+        <View style={styles.alertIconBox}>
+           <Ionicons name="time" size={20} color="#B45309" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.alertTitle}>{t('verify_email_warning', 'Verifique seu e-mail')}</Text>
+          <Text style={styles.alertText}>
+            {t('grace_period_msg', `Restam ${Math.ceil(hoursLeft)}h para confirmar.`)}
+          </Text>
+          
+          {/* --- NOVO BOTÃO DE AÇÃO --- */}
+          <TouchableOpacity onPress={onVerifyPress} style={styles.actionLinkBtn}>
+            <Text style={styles.actionLinkText}>Verificar Agora</Text>
+            <Ionicons name="arrow-forward" size={12} color="#78350F" />
+          </TouchableOpacity>
+        </View>
+        
+        {/* BOTÃO DE FECHAR (X) */}
+        <TouchableOpacity onPress={onClose} style={styles.closeAlertButton} hitSlop={{top:10, bottom:10, left:10, right:10}}>
+          <Ionicons name="close" size={20} color="#78350F" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
 
 const CustomToast = ({ message, visible, icon }: { message: string, visible: boolean, icon?: any }) => {
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
@@ -186,6 +240,7 @@ export default function DiscoveryScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { user } = useAuth(); 
 
   const [citySearch, setCitySearch] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -194,6 +249,8 @@ export default function DiscoveryScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [activeInput, setActiveInput] = useState<'city' | 'message' | null>(null);
+
+  const [isAlertVisible, setIsAlertVisible] = useState(true);
 
   const lastSearchRef = useRef('');
   const [isLikedCurrent, setIsLikedCurrent] = useState(false);
@@ -287,8 +344,8 @@ export default function DiscoveryScreen() {
     );
   }
 
-  // --- CORREÇÃO DE PADDING NO IOS ---
   const headerPaddingTop = Platform.OS === 'android' ? insets.top + 15 : 10;
+  const alertTopOffset = headerPaddingTop + 60; 
 
   return (
     <SafeAreaView style={styles.container}>
@@ -301,7 +358,6 @@ export default function DiscoveryScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 30}
       >
 
-        {/* Barra de Busca */}
         <View style={[
             styles.searchWrapper,
             { paddingTop: headerPaddingTop }
@@ -313,6 +369,7 @@ export default function DiscoveryScreen() {
               </View>
               <TouchableOpacity style={styles.searchButton} onPress={() => handleSearchPress()}><Text style={styles.searchButtonText}>{t('filter_button')}</Text></TouchableOpacity>
             </View>
+
             {suggestions.length > 0 && (
               <View style={[
                   styles.suggestionsList,
@@ -325,8 +382,16 @@ export default function DiscoveryScreen() {
             )}
         </View>
 
+        {/* --- ALERTA FLUTUANTE DE 72H COM LINK --- */}
+        <EmailVerificationAlert 
+            user={user} 
+            isVisible={isAlertVisible} 
+            onClose={() => setIsAlertVisible(false)} 
+            topOffset={alertTopOffset}
+            onVerifyPress={() => navigation.navigate('PleaseVerifyScreen')} 
+        />
+
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            {/* Card Principal */}
             <View style={[styles.contentContainer, { marginTop: 10 }]}>
               {(isLoading || isSearching) && <ActivityIndicator size="large" color="#8B5CF6" />}
               {!isLoading && !isSearching && isQueueEmpty && (
@@ -393,5 +458,60 @@ const styles = StyleSheet.create({
   actionButton: { marginTop: 20, backgroundColor: '#8B5CF6', padding: 12, borderRadius: 20 },
   actionButtonText: { color: 'white', fontWeight: 'bold' },
   toastContainer: { position: 'absolute', top: 60, alignSelf: 'center', backgroundColor: '#A855F7', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 9999, elevation: 9999, shadowColor: "#000", shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 4.65 },
-  toastText: { color: 'white', fontWeight: 'bold', fontSize: 14 }
+  toastText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+
+  // --- Estilos do Alerta Flutuante ---
+  floatingAlert: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 2000, 
+    elevation: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+  },
+  alertContent: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#F59E0B'
+  },
+  alertIconBox: {
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    padding: 8,
+    borderRadius: 20
+  },
+  alertTitle: {
+    color: '#78350F',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginBottom: 2
+  },
+  alertText: {
+    color: '#92400E',
+    fontSize: 12
+  },
+  actionLinkBtn: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  actionLinkText: {
+    color: '#78350F',
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
+    fontSize: 13
+  },
+  closeAlertButton: {
+    padding: 4,
+    backgroundColor: 'rgba(120, 53, 15, 0.1)',
+    borderRadius: 15
+  }
 });

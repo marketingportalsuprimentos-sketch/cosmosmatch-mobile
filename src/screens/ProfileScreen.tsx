@@ -7,13 +7,15 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   Settings, MapPin, Pencil, Sparkles, UserPlus, MessageCircle, Ban, ArrowLeft, Check, MoreVertical, LogOut, ShieldAlert, Lock, Calculator, X, Send, Plus, 
-  FileText, Shield 
+  FileText, Shield, Trash2 
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 
 import { toast } from '../lib/toast'; 
 import { useAuth } from '../contexts/AuthContext'; 
+
+// --- CORREÇÃO AQUI: Imports separados corretamente ---
 import {
   useGetMyProfile,
   useGetPublicProfile,
@@ -25,6 +27,9 @@ import {
   useUnfollowUser,
   useBlockUser
 } from '../features/profile/hooks/useProfile';
+
+// Importamos a função de deletar DIRETO da API agora
+import { deleteMyAccount } from '../features/profile/services/profileApi';
 
 import { useCreateOrGetConversation } from '../features/chat/hooks/useChatMutations';
 
@@ -106,7 +111,87 @@ const NatalChartLockModal = ({ visible, onClose, counts, metas }: any) => {
     );
 };
 
-const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
+// --- Modal de Confirmação de Exclusão ---
+const DeleteAccountModal = ({ visible, onClose, onConfirm, isLoading }: any) => {
+  const [confirmationText, setConfirmationText] = useState('');
+
+  React.useEffect(() => {
+    if (!visible) setConfirmationText('');
+  }, [visible]);
+
+  const handleConfirm = () => {
+    if (confirmationText === 'DELETAR') {
+      onConfirm();
+    } else {
+      Alert.alert('Confirmação Incorreta', 'Por favor, digite DELETAR em maiúsculo.');
+    }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{width: '100%', alignItems: 'center'}}>
+                <View style={[styles.modalContent, { borderColor: '#EF4444' }]}>
+                <ShieldAlert size={48} color="#EF4444" style={{ marginBottom: 16 }} />
+                
+                <Text style={[styles.modalTitle, { color: '#EF4444' }]}>Zona de Perigo</Text>
+                
+                <Text style={styles.modalText}>
+                    Tem certeza? Sua conta ficará em quarentena por <Text style={{fontWeight:'bold', color:'white'}}>40 dias</Text>.
+                    Se não fizer login nesse período, ela será apagada permanentemente.
+                </Text>
+
+                <Text style={[styles.modalText, { fontSize: 12, marginBottom: 8 }]}>
+                    Digite <Text style={{fontWeight:'bold', color:'#EF4444'}}>DELETAR</Text> abaixo para confirmar:
+                </Text>
+
+                <TextInput
+                    style={{
+                    backgroundColor: '#111827',
+                    borderWidth: 1,
+                    borderColor: '#374151',
+                    borderRadius: 8,
+                    color: 'white',
+                    padding: 12,
+                    width: '100%',
+                    textAlign: 'center',
+                    marginBottom: 20
+                    }}
+                    placeholder="DELETAR"
+                    placeholderTextColor="#6B7280"
+                    autoCapitalize="characters"
+                    value={confirmationText}
+                    onChangeText={setConfirmationText}
+                />
+
+                <TouchableOpacity 
+                    style={[styles.btnPrimaryFull, { backgroundColor: '#EF4444', marginTop: 0 }]} 
+                    onPress={handleConfirm}
+                    disabled={isLoading}
+                >
+                    {isLoading ? (
+                    <ActivityIndicator color="white" />
+                    ) : (
+                    <Text style={styles.btnText}>Excluir Minha Conta</Text>
+                    )}
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={{ marginTop: 16 }} onPress={onClose} disabled={isLoading}>
+                    <Text style={{ color: '#9CA3AF' }}>Cancelar</Text>
+                </TouchableOpacity>
+                </View>
+            </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
+
+// --- ProfileMenu com CORREÇÃO DE TRAVAMENTO ---
+const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccount }: any) => {
   const { t } = useTranslation();
   if (!visible) return null;
   return (
@@ -134,9 +219,26 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
             <View style={styles.menuDivider} />
             
             <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); if (onLogout) onLogout(); }}>
-                <LogOut size={20} color="#EF4444" style={{marginRight: 10}} />
-                <Text style={[styles.menuText, {color: '#EF4444'}]}>{t('logout')}</Text>
+                <LogOut size={20} color="#D1D5DB" style={{marginRight: 10}} />
+                <Text style={styles.menuText}>{t('logout')}</Text>
             </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+            
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => { 
+                onClose(); 
+                // Espera 500ms para o menu fechar antes de abrir o modal de exclusão
+                setTimeout(() => {
+                  if (onDeleteAccount) onDeleteAccount();
+                }, 500);
+              }}
+            >
+                <Trash2 size={20} color="#EF4444" style={{marginRight: 10}} />
+                <Text style={[styles.menuText, {color: '#EF4444', fontWeight: 'bold'}]}>Excluir Conta</Text>
+            </TouchableOpacity>
+
           </View>
         </View>
       </TouchableWithoutFeedback>
@@ -145,7 +247,7 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
 };
 
 // --- IDENTITY CARD ---
-const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress }: any) => {
+const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress, onDeleteAccountPress }: any) => {
     const navigation = useNavigation<any>();
     const { t } = useTranslation();
     const [menuVisible, setMenuVisible] = useState(false);
@@ -195,7 +297,13 @@ const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, on
                     </>
                 )}
             </View>
-            <ProfileMenu visible={menuVisible} onClose={() => setMenuVisible(false)} onLogout={onLogout} onBlocked={() => navigation.navigate('BlockedProfiles')} />
+            <ProfileMenu 
+                visible={menuVisible} 
+                onClose={() => setMenuVisible(false)} 
+                onLogout={onLogout} 
+                onBlocked={() => navigation.navigate('BlockedProfiles')} 
+                onDeleteAccount={onDeleteAccountPress} 
+            />
         </View>
     );
 };
@@ -321,13 +429,16 @@ export default function ProfileScreen() {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isLockModalOpen, setLockModalOpen] = useState(false);
   const [isMessageModalOpen, setMessageModalOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false); // Estado para o Pull-to-Refresh
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Estados para Exclusão de Conta
+  const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const targetUserId = (route.params as any)?.userId || loggedInUser?.id;
   const isOwner = targetUserId === loggedInUser?.id;
 
   // --- Hooks de Dados ---
-  // Importante: Pegamos o `refetch` para poder atualizar a tela manualmente
   const { 
     data: profileData, 
     isLoading: profileLoading, 
@@ -356,7 +467,6 @@ export default function ProfileScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-        // Atualiza tudo ao mesmo tempo
         await Promise.all([
             refetchProfile(),
             refetchPhotos(),
@@ -373,6 +483,23 @@ export default function ProfileScreen() {
 
   const handleEdit = () => navigation.navigate('EditProfileScreen' as never);
   const handleLogout = () => { if (signOut) { signOut(); } else { Alert.alert(t('error'), t('error_logout')); } };
+
+  // --- Lógica de Exclusão de Conta ---
+  const handleDeleteAccount = async () => {
+    try {
+      setIsDeleting(true);
+      await deleteMyAccount();
+      // Sucesso
+      setIsDeleting(false);
+      setDeleteModalOpen(false);
+      Alert.alert('Conta Excluída', 'Sua conta foi agendada para exclusão. Você será desconectado.');
+      signOut(); // Desloga o usuário
+    } catch (error) {
+      console.error(error);
+      setIsDeleting(false);
+      Alert.alert('Erro', 'Não foi possível excluir a conta. Tente novamente.');
+    }
+  };
 
   const activePhoto = photosData?.find(p => p.id === selectedPhotoId) || null;
 
@@ -443,6 +570,7 @@ export default function ProfileScreen() {
             myId={loggedInUser?.id} 
             onLogout={handleLogout} 
             onMessagePress={() => setMessageModalOpen(true)} 
+            onDeleteAccountPress={() => setDeleteModalOpen(true)} 
         />
         {profileData.behavioralAnswers && profileData.behavioralAnswers.length > 0 && ( <BehavioralRadarChart answers={profileData.behavioralAnswers} sign={sunSign} userId={profileData.userId} isOwner={isOwner} /> )}
         
@@ -472,6 +600,14 @@ export default function ProfileScreen() {
       />
       
       <SendMessageModal visible={isMessageModalOpen} onClose={() => setMessageModalOpen(false)} recipient={profileData} onSend={handleSendMessage} isLoading={isSendingMessage} />
+
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
+      <DeleteAccountModal 
+        visible={isDeleteModalOpen} 
+        onClose={() => setDeleteModalOpen(false)} 
+        onConfirm={handleDeleteAccount}
+        isLoading={isDeleting}
+      />
     </SafeAreaView>
   );
 }

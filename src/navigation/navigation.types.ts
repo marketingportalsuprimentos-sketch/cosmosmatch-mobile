@@ -1,20 +1,38 @@
+// mobile/src/navigation/navigation.types.ts
 import { NavigatorScreenParams } from '@react-navigation/native';
 
 // Rotas das Abas (Barra de baixo)
 export type MainTabParamList = {
-  Discovery: undefined;
-  Chat: undefined;
-  Profile: undefined;
+  DiscoveryTab: undefined;
+  FeedTab: undefined;
+  PostCreation: undefined;
+  ChatTab: undefined;
+  ProfileTab: undefined;
 };
 
 // Rotas da Pilha Principal (Telas cheias)
 export type RootStackParamList = {
+  // Auth
   Login: undefined;
-  Register: undefined; // <--- Nova rota adicionada
+  Register: undefined;
+  ForgotPassword: undefined;
+  
+  // App
   MainTabs: NavigatorScreenParams<MainTabParamList>; 
-  ChatConversation: { conversationId: string; userName: string }; 
-  ProfileScreen: { userId?: string }; 
-  EditProfile: undefined;
+  
+  // Telas Específicas
+  ChatConversation: { conversationId: string; userName: string; avatarUrl?: string }; 
+  PublicProfile: { userId: string }; 
+  EditProfileScreen: undefined;
+  NatalChartScreen: undefined;
+  SynastryReport: { targetUserId: string };
+  NumerologyConnection: { targetUserId: string };
+  SearchUsers: undefined;
+  BlockedProfiles: undefined;
+  
+  // Telas Especiais
+  PleaseVerifyScreen: undefined; // <--- ROTA CORRIGIDA AQUI
+  Premium: undefined;
 };
 
 declare global {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, 
-  Image, ActivityIndicator, Alert, Platform, KeyboardAvoidingView, Modal, LogBox 
+  View, Text, StyleSheet, TextInput, TouchableOpacity, 
+  Image, ActivityIndicator, Alert, Platform, KeyboardAvoidingView, Modal, LogBox, FlatList 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -35,7 +35,7 @@ export const EditProfileScreen = () => {
   const { mutateAsync: updateProfile, isPending: isSavingProfile } = useUpdateProfile(); 
   const { mutateAsync: updateAvatar, isPending: isSavingAvatar } = useUpdateAvatar(); 
 
-  // Visualização do Nome (Travado para evitar erro 400 do backend)
+  // Visualização do Nome
   const [name, setName] = useState('');
   
   const [birthDate, setBirthDate] = useState(new Date());
@@ -78,7 +78,6 @@ export const EditProfileScreen = () => {
     }
   }, [profile]);
 
-  // --- NOVA LÓGICA DE MÍDIA (CÂMERA + GALERIA) ---
   const requestCamera = async () => {
     try {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -90,7 +89,7 @@ export const EditProfileScreen = () => {
         const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            aspect: [1, 1], // Quadrado perfeito para perfil
+            aspect: [1, 1],
             quality: 0.8,
         });
 
@@ -127,35 +126,30 @@ export const EditProfileScreen = () => {
     }
   };
 
-  // Função que abre o menu de escolha
   const handleMediaOptions = () => {
     Alert.alert(
-        t('add_photo_title'), // "Adicionar Foto"
-        t('add_photo_msg'),   // "Escolha a origem da foto"
+        t('add_photo_title'), 
+        t('add_photo_msg'),
         [
             { text: t('cancel'), style: 'cancel' },
-            { text: t('take_photo'), onPress: requestCamera },   // "Tirar Foto"
-            { text: t('open_gallery'), onPress: requestGallery } // "Abrir Galeria"
+            { text: t('take_photo'), onPress: requestCamera },
+            { text: t('open_gallery'), onPress: requestGallery }
         ]
     );
   };
-  // ------------------------------------------------
 
   const handleSubmit = async () => {
     try {
-        // === VALIDAÇÃO 1: Campos de Texto ===
         if (!birthCity || !currentCity || !gender || !cpfCnpj) {
             Alert.alert(t('required_fields_title'), t('required_fields_msg'));
             return;
         }
 
-        // === VALIDAÇÃO 2: Foto Obrigatória ===
         if (!avatarUri) {
             Alert.alert(t('required_fields_title'), "A foto de perfil é obrigatória para continuar.");
             return;
         }
 
-        // PACOTE DE DADOS (Sem 'name' para evitar erro 400)
         const payload: UpdateProfileDto = {
             birthDate: birthDate.toISOString(),
             birthTime: `${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`,
@@ -173,7 +167,6 @@ export const EditProfileScreen = () => {
             await updateAvatar(avatarUri);
         }
 
-        // Sucesso: Avança para o App
         navigation.reset({
           index: 0,
           routes: [{ name: 'MainTabs' }],
@@ -271,162 +264,162 @@ export const EditProfileScreen = () => {
             <View style={{width: 24}} />
         </View>
 
-        <ScrollView 
-            contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps='always'
-            showsVerticalScrollIndicator={false}
-        >
-            
-            <View style={styles.avatarSection}>
-                <View style={styles.avatarWrapper}>
-                    <Image source={{ uri: avatarUri || 'https://via.placeholder.com/150' }} style={styles.avatar} />
-                    {/* Agora chamamos handleMediaOptions em vez de abrir direto */}
-                    <TouchableOpacity style={styles.cameraBtn} onPress={handleMediaOptions} disabled={isSaving}>
-                        <Camera size={20} color="#FFF" />
+        {/* --- CORREÇÃO: Conteúdo direto no JSX (não em função), evita o fechamento do teclado --- */}
+        <FlatList
+          data={[]}
+          renderItem={null}
+          keyboardShouldPersistTaps='always'
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={styles.scroll}>
+                <View style={styles.avatarSection}>
+                    <View style={styles.avatarWrapper}>
+                        <Image source={{ uri: avatarUri || 'https://via.placeholder.com/150' }} style={styles.avatar} />
+                        <TouchableOpacity style={styles.cameraBtn} onPress={handleMediaOptions} disabled={isSaving}>
+                            <Camera size={20} color="#FFF" />
+                        </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity onPress={handleMediaOptions} disabled={isSaving}>
+                        <Text style={styles.changePhotoText}>
+                            {isSavingAvatar ? t('uploading_photo') : t('change_photo')}
+                        </Text>
                     </TouchableOpacity>
                 </View>
-                {/* Agora chamamos handleMediaOptions em vez de abrir direto */}
-                <TouchableOpacity onPress={handleMediaOptions} disabled={isSaving}>
-                    <Text style={styles.changePhotoText}>
-                        {isSavingAvatar ? t('uploading_photo') : t('change_photo')}
-                    </Text>
-                </TouchableOpacity>
-            </View>
 
-            <View style={styles.form}>
-                
-                {/* Visualização do Nome (Read-only) */}
-                <View style={[styles.inputGroup, {opacity: 0.7}]}>
-                    <View style={styles.labelRow}>
-                        <Text style={styles.label}>{t('name_placeholder')}</Text>
-                        <TouchableOpacity onPress={() => showInfo('Nome de Exibição', 'Este campo não pode ser alterado aqui.')}>
-                            <Lock size={14} color="#9CA3AF" style={{marginLeft: 6}} />
-                        </TouchableOpacity>
-                    </View>
-                    <TextInput 
-                        style={[styles.input, {backgroundColor: '#374151', color: '#9CA3AF'}]} 
-                        value={name} 
-                        editable={false} 
-                        placeholder="Seu nome público"
-                        placeholderTextColor="#6B7280"
-                    />
-                </View>
-
-                <View style={[styles.row, { zIndex: 1 }]}>
-                    <View style={styles.col}>
-                        <Text style={styles.label}>{t('birth_date_label')}</Text>
-                        <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.inputBtn}>
-                            <Text style={styles.inputText}>{birthDate.toLocaleDateString('pt-BR')}</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.col}>
-                        <Text style={styles.label}>{t('birth_time_label')}</Text>
-                        <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.inputBtn}>
-                            <Text style={styles.inputText}>
-                                {`${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                <View style={[styles.inputGroup, { zIndex: 20 }]}>
-                    <Text style={styles.label}>{t('birth_city_label')}</Text>
-                    <CityAutocomplete 
-                        placeholder={t('filter_city_placeholder')}
-                        value={birthCity}
-                        onSelect={(city) => setBirthCity(city)}
-                    />
-                </View>
-
-                <View style={[styles.inputGroup, { zIndex: 10 }]}>
-                    <View style={styles.labelRow}>
-                        <Text style={styles.label}>{t('full_name_birth_label')}</Text>
-                        <TouchableOpacity onPress={() => showInfo(t('full_name_birth_info_title'), t('full_name_birth_info_msg'))}>
-                            <Info size={16} color="#9CA3AF" style={{marginLeft: 6}} />
-                        </TouchableOpacity>
-                    </View>
-                    <TextInput 
-                        style={styles.input} 
-                        value={fullNameBirth} 
-                        onChangeText={setFullNameBirth}
-                        placeholder={t('name_placeholder')}
-                        placeholderTextColor="#6B7280"
-                    />
-                </View>
-
-                <View style={[styles.row, { zIndex: 15 }]}>
-                     <View style={[styles.col, {flex: 1.5, zIndex: 20}]}>
-                        <Text style={styles.label}>{t('current_city_label')}</Text>
-                        <CityAutocomplete 
-                            placeholder={t('filter_city_placeholder')}
-                            value={currentCity}
-                            onSelect={(city) => setCurrentCity(city)}
+                <View style={styles.form}>
+                    
+                    <View style={[styles.inputGroup, {opacity: 0.7}]}>
+                        <View style={styles.labelRow}>
+                            <Text style={styles.label}>{t('name_placeholder')}</Text>
+                            <TouchableOpacity onPress={() => showInfo('Nome de Exibição', 'Este campo não pode ser alterado aqui.')}>
+                                <Lock size={14} color="#9CA3AF" style={{marginLeft: 6}} />
+                            </TouchableOpacity>
+                        </View>
+                        <TextInput 
+                            style={[styles.input, {backgroundColor: '#374151', color: '#9CA3AF'}]} 
+                            value={name} 
+                            editable={false} 
+                            placeholder="Seu nome público"
+                            placeholderTextColor="#6B7280"
                         />
                     </View>
 
-                    <View style={[styles.col, {flex: 1}]}>
-                        <Text style={styles.label}>{t('gender_label')}</Text>
-                        <TouchableOpacity 
-                            style={styles.inputBtn} 
-                            onPress={() => setShowGenderPicker(true)}
-                        >
-                            <Text style={styles.inputText} numberOfLines={1}>{genderLabel}</Text>
-                            <ChevronDown size={16} color="#9CA3AF" style={{marginLeft: 4}} />
-                        </TouchableOpacity>
+                    <View style={[styles.row, { zIndex: 1 }]}>
+                        <View style={styles.col}>
+                            <Text style={styles.label}>{t('birth_date_label')}</Text>
+                            <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.inputBtn}>
+                                <Text style={styles.inputText}>{birthDate.toLocaleDateString('pt-BR')}</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.col}>
+                            <Text style={styles.label}>{t('birth_time_label')}</Text>
+                            <TouchableOpacity onPress={() => setShowTimePicker(true)} style={styles.inputBtn}>
+                                <Text style={styles.inputText}>
+                                    {`${birthTime.getHours().toString().padStart(2, '0')}:${birthTime.getMinutes().toString().padStart(2, '0')}`}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
 
-                <View style={[styles.inputGroup, styles.borderTop, { zIndex: 1 }]}>
-                     <View style={styles.labelRow}>
-                        <Lock size={16} color="#FACC15" style={{marginRight: 6}} />
-                        <Text style={styles.label}>{t('cpf_label')}</Text>
-                        <TouchableOpacity onPress={() => showInfo(t('cpf_info_title'), t('cpf_info_msg'))}>
-                            <Info size={16} color="#9CA3AF" style={{marginLeft: 6}} />
-                        </TouchableOpacity>
+                    <View style={[styles.inputGroup, { zIndex: 20 }]}>
+                        <Text style={styles.label}>{t('birth_city_label')}</Text>
+                        <CityAutocomplete 
+                            placeholder={t('filter_city_placeholder')}
+                            value={birthCity}
+                            onSelect={(city) => setBirthCity(city)}
+                        />
                     </View>
-                    <TextInput 
-                        style={styles.input} 
-                        value={cpfCnpj} 
-                        onChangeText={setCpfCnpj} 
-                        placeholder="000.000.000-00"
-                        keyboardType="numeric"
-                        placeholderTextColor="#6B7280"
-                    />
+
+                    <View style={[styles.inputGroup, { zIndex: 10 }]}>
+                        <View style={styles.labelRow}>
+                            <Text style={styles.label}>{t('full_name_birth_label')}</Text>
+                            <TouchableOpacity onPress={() => showInfo(t('full_name_birth_info_title'), t('full_name_birth_info_msg'))}>
+                                <Info size={16} color="#9CA3AF" style={{marginLeft: 6}} />
+                            </TouchableOpacity>
+                        </View>
+                        <TextInput 
+                            style={styles.input} 
+                            value={fullNameBirth} 
+                            onChangeText={setFullNameBirth}
+                            placeholder={t('name_placeholder')}
+                            placeholderTextColor="#6B7280"
+                        />
+                    </View>
+
+                    <View style={[styles.row, { zIndex: 15 }]}>
+                        <View style={[styles.col, {flex: 1.5, zIndex: 20}]}>
+                            <Text style={styles.label}>{t('current_city_label')}</Text>
+                            <CityAutocomplete 
+                                placeholder={t('filter_city_placeholder')}
+                                value={currentCity}
+                                onSelect={(city) => setCurrentCity(city)}
+                            />
+                        </View>
+
+                        <View style={[styles.col, {flex: 1}]}>
+                            <Text style={styles.label}>{t('gender_label')}</Text>
+                            <TouchableOpacity 
+                                style={styles.inputBtn} 
+                                onPress={() => setShowGenderPicker(true)}
+                            >
+                                <Text style={styles.inputText} numberOfLines={1}>{genderLabel}</Text>
+                                <ChevronDown size={16} color="#9CA3AF" style={{marginLeft: 4}} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    <View style={[styles.inputGroup, styles.borderTop, { zIndex: 1 }]}>
+                        <View style={styles.labelRow}>
+                            <Lock size={16} color="#FACC15" style={{marginRight: 6}} />
+                            <Text style={styles.label}>{t('cpf_label')}</Text>
+                            <TouchableOpacity onPress={() => showInfo(t('cpf_info_title'), t('cpf_info_msg'))}>
+                                <Info size={16} color="#9CA3AF" style={{marginLeft: 6}} />
+                            </TouchableOpacity>
+                        </View>
+                        <TextInput 
+                            style={styles.input} 
+                            value={cpfCnpj} 
+                            onChangeText={setCpfCnpj} 
+                            placeholder="000.000.000-00"
+                            keyboardType="numeric"
+                            placeholderTextColor="#6B7280"
+                        />
+                    </View>
+
+                    <View style={[styles.inputGroup, { zIndex: 1 }]}>
+                        <Text style={styles.label}>{t('bio_label')}</Text>
+                        <TextInput 
+                            style={[styles.input, styles.textArea]} 
+                            value={bio} 
+                            onChangeText={setBio} 
+                            placeholder={t('bio_placeholder')}
+                            placeholderTextColor="#6B7280"
+                            multiline
+                            numberOfLines={3}
+                        />
+                    </View>
+
                 </View>
 
-                <View style={[styles.inputGroup, { zIndex: 1 }]}>
-                    <Text style={styles.label}>{t('bio_label')}</Text>
-                    <TextInput 
-                        style={[styles.input, styles.textArea]} 
-                        value={bio} 
-                        onChangeText={setBio} 
-                        placeholder={t('bio_placeholder')}
-                        placeholderTextColor="#6B7280"
-                        multiline
-                        numberOfLines={3}
-                    />
-                </View>
+                <TouchableOpacity 
+                    style={[styles.saveButton, isSaving && styles.disabledBtn, { zIndex: 0 }]} 
+                    onPress={handleSubmit}
+                    disabled={isSaving}
+                >
+                    {isSaving ? (
+                        <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}>
+                            <ActivityIndicator color="#FFF" />
+                            <Text style={styles.saveText}>{t('saving')}</Text>
+                        </View>
+                    ) : (
+                        <Text style={styles.saveText}>{t('save_profile_button')}</Text>
+                    )}
+                </TouchableOpacity>
 
+                <View style={{ height: 60 }} />
             </View>
-
-            <TouchableOpacity 
-                style={[styles.saveButton, isSaving && styles.disabledBtn, { zIndex: 0 }]} 
-                onPress={handleSubmit}
-                disabled={isSaving}
-            >
-                {isSaving ? (
-                    <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}>
-                        <ActivityIndicator color="#FFF" />
-                        <Text style={styles.saveText}>{t('saving')}</Text>
-                    </View>
-                ) : (
-                    <Text style={styles.saveText}>{t('save_profile_button')}</Text>
-                )}
-            </TouchableOpacity>
-
-            <View style={{ height: 60 }} />
-
-        </ScrollView>
+          }
+        />
 
         {renderDateTimePicker(showDatePicker, setShowDatePicker, birthDate, 'date', setBirthDate)}
         {renderDateTimePicker(showTimePicker, setShowTimePicker, birthTime, 'time', setBirthTime)}

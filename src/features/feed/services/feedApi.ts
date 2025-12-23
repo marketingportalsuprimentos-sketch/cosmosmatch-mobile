@@ -1,57 +1,55 @@
-import { api } from '../../../services/api';
+// src/features/feed/services/feedApi.ts
 
-export enum MediaType {
-  PHOTO = 'PHOTO',
-  VIDEO = 'VIDEO',
-}
+import { api } from '@/services/api'; 
+import { FeedDeck, CreatedPost, PostComment, ReportReason } from '@/types/feed.types';
 
-export interface FeedPost {
-  id: string;
-  content: string | null;
-  imageUrl: string;
-  mediaType: MediaType;
-  videoDuration: number | null;
-  createdAt: string;
-  expiresAt: string;
-  authorId: string;
-  likesCount: number;
-  commentsCount: number;
-  isLikedByMe: boolean; 
-}
-
-export interface FeedDeck {
-  author: { id: string; name: string; profile?: { imageUrl?: string | null } };
-  posts: FeedPost[];
-}
-
-export interface PostComment {
-  id: string;
-  content: string;
-  userId: string;
-  postId: string;
-  createdAt: string;
-  user: { id: string; name: string; profile?: { imageUrl?: string | null } };
-}
-
+// Interfaces locais para payload
 interface CreateCommentData { content: string; }
+interface ReportPostData { reason: ReportReason; }
 
-export const getFeedPage = async (pageParam = 1): Promise<FeedDeck | null> => {
+// 1. Feed e Posts
+// CORREÇÃO: O retorno agora é FeedDeck[] (Array), pois o backend manda uma lista
+export const getFeed = async (params: { skip: number; take: number }): Promise<FeedDeck[]> => {
   try {
-    const { data } = await api.get<FeedDeck | null>(`/post/feed?page=${pageParam}`);
+    const { data } = await api.get<FeedDeck[]>('/post/feed', { 
+      params: { 
+        skip: params.skip, 
+        take: params.take 
+      } 
+    });
+
+    // --- DEBUG: Vamos ver o que o servidor está mandando ---
+    if (data && data.length > 0) {
+       console.log('--- DEBUG FEED ---');
+       console.log('Autor do primeiro post:', data[0].author.name);
+       // AQUI vamos descobrir a verdade:
+       console.log('Eu sigo ele? (isFollowedByMe):', data[0].author.isFollowedByMe); 
+       console.log('------------------');
+    }
+    // -------------------------------------------------------
+
     return data;
   } catch (error: any) {
-    if (error?.response?.status === 404) return null;
+    if (error?.response?.status === 404) return [];
     throw error;
   }
 };
 
-export const createPost = async (formData: FormData): Promise<any> => {
-  const { data } = await api.post('/post', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+export const createPost = async (formData: FormData): Promise<CreatedPost> => {
+  const { data } = await api.post<CreatedPost>('/post', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
   });
   return data;
 };
 
+export const deletePost = async (postId: string): Promise<{ success: boolean; message: string }> => {
+  const response = await api.delete(`/post/${postId}`);
+  return response.data;
+};
+
+// 2. Interações (Like/Comment)
 export const likePost = async (postId: string) => {
   const { data } = await api.post<{ success: boolean }>(`/post/${postId}/like`);
   return data;
@@ -72,7 +70,13 @@ export const getPostComments = async (postId: string) => {
   return data;
 };
 
-export const deletePost = async (postId: string) => {
-  const response = await api.delete(`/post/${postId}`);
-  return response.data;
+// 3. Denúncias e Moderação
+export const reportPost = async (postId: string, payload: ReportPostData) => {
+  const { data } = await api.post<{ success: boolean }>(`/post/${postId}/report`, payload);
+  return data;
+};
+
+export const restorePost = async (postId: string) => {
+  const { data } = await api.patch<{ success: boolean }>(`/post/${postId}/restore`);
+  return data;
 };
