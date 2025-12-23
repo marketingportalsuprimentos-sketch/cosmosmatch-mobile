@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-query';
 import { Alert } from 'react-native';
 import * as feedApi from '../services/feedApi';
-// --- IMPORTANTE: Ajuste o caminho se necessário para apontar para sua API de Profile ---
+// Caminho ajustado conforme seu arquivo original
 import { followUser, unfollowUser } from '../../profile/services/profileApi'; 
 import { chatApi } from '../../chat/services/chatApi'; 
 import { FeedDeck } from '@/types/feed.types';
@@ -22,17 +22,22 @@ export const useGetFeed = () => {
   return useInfiniteQuery({
     queryKey: ['feed', user?.id],
     queryFn: async ({ pageParam = 0 }) => {
-      // O feedApi agora retorna FeedDeck[] (Array), garantido
       const data = await feedApi.getFeed({ skip: pageParam, take: 2 });
       return data;
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
-      // Como agora é um array, verificamos o tamanho dele
-      if (!lastPage || lastPage.length === 0) {
-        return undefined;
-      }
-      return allPages.length * 2; // Multiplicamos pelo 'take' ou apenas retornamos o tamanho acumulado
+      // AJUSTE CRÍTICO: Suporta tanto Objeto quanto Array
+      if (!lastPage) return undefined;
+      
+      const isArray = Array.isArray(lastPage);
+      // Se for array vazio, acabou
+      if (isArray && lastPage.length === 0) return undefined;
+      // Se for objeto único mas vazio (sem posts), acabou
+      if (!isArray && (!lastPage.posts || lastPage.posts.length === 0)) return undefined;
+      
+      // Incrementa a paginação
+      return allPages.length * 2; 
     },
     enabled: !!user?.id,
     staleTime: 1000 * 60 * 5, 
@@ -54,7 +59,31 @@ export const useCreatePost = () => {
   });
 };
 
-// --- LOGICA DE LIKE (Já existia e funcionava) ---
+// --- FUNÇÃO AUXILIAR PARA ATUALIZAR DECK (HÍBRIDA) ---
+// Atualiza um deck (objeto de usuário+posts) com o novo like
+function updateDeckLike(deck: FeedDeck | any, postId: string, isLike: boolean) {
+    if (!deck || !deck.posts) return deck;
+    
+    // Verifica se o post alvo está dentro deste deck
+    const postExists = deck.posts.some((p: any) => p.id === postId);
+    if (!postExists) return deck;
+    
+    return {
+      ...deck,
+      posts: deck.posts.map((post: any) => {
+        if (post.id === postId) {
+          return { 
+            ...post, 
+            isLikedByMe: isLike, 
+            likesCount: Math.max(0, isLike ? post.likesCount + 1 : post.likesCount - 1)
+          };
+        }
+        return post;
+      }),
+    };
+}
+
+// --- LOGICA DE LIKE (HÍBRIDA) ---
 export const useLikePost = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -64,29 +93,17 @@ export const useLikePost = () => {
     onMutate: async (postId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
-      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(feedKey);
+      const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
 
-      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(feedKey, (old) => {
+      queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
-        const newPages = old.pages.map((page) => {
-           // page é FeedDeck[]
-           return page.map(deck => {
-              const postExists = deck.posts.some(p => p.id === postId);
-              if (!postExists) return deck;
-              return {
-                ...deck,
-                posts: deck.posts.map((post) => {
-                  if (post.id === postId) {
-                    return { 
-                      ...post, 
-                      isLikedByMe: true, 
-                      likesCount: post.isLikedByMe ? post.likesCount : post.likesCount + 1 
-                    };
-                  }
-                  return post;
-                }),
-              };
-           });
+        const newPages = old.pages.map((page: any) => {
+           // CENÁRIO A: É uma Lista (Array)
+           if (Array.isArray(page)) {
+               return page.map(deck => updateDeckLike(deck, postId, true));
+           }
+           // CENÁRIO B: É um Objeto Único (Backend Atual)
+           return updateDeckLike(page, postId, true);
         });
         return { ...old, pages: newPages };
       });
@@ -112,28 +129,15 @@ export const useUnlikePost = () => {
     onMutate: async (postId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
-      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(feedKey);
+      const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
 
-      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(feedKey, (old) => {
+      queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
-        const newPages = old.pages.map((page) => {
-            return page.map(deck => {
-                const postExists = deck.posts.some(p => p.id === postId);
-                if (!postExists) return deck;
-                return {
-                  ...deck,
-                  posts: deck.posts.map((post) => {
-                    if (post.id === postId) {
-                      return { 
-                        ...post, 
-                        isLikedByMe: false, 
-                        likesCount: Math.max(0, post.isLikedByMe ? post.likesCount - 1 : post.likesCount)
-                      };
-                    }
-                    return post;
-                  }),
-                };
-            });
+        const newPages = old.pages.map((page: any) => {
+            if (Array.isArray(page)) {
+               return page.map(deck => updateDeckLike(deck, postId, false));
+            }
+            return updateDeckLike(page, postId, false);
         });
         return { ...old, pages: newPages };
       });
@@ -150,41 +154,38 @@ export const useUnlikePost = () => {
   });
 };
 
-// --- NOVA LÓGICA: SEGUIR PELO FEED (ATUALIZAÇÃO OTIMISTA) ---
+// --- SEGUIR PELO FEED (HÍBRIDO: ARRAY OU OBJETO) ---
 export const useFollowAuthorInFeed = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: (authorId: string) => followUser(authorId), // Usa a API de profile
+    mutationFn: (authorId: string) => followUser(authorId), 
     onMutate: async (authorId) => {
       const feedKey = ['feed', user?.id];
       
-      // 1. Cancela refetchs em andamento
       await queryClient.cancelQueries({ queryKey: feedKey });
-      
-      // 2. Guarda o estado anterior
-      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(feedKey);
+      const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
 
-      // 3. Atualiza o cache manualment (Isso é o que "Segura" o botão)
-      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(feedKey, (old) => {
+      queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
         
-        const newPages = old.pages.map((page) => {
-           // Percorre todos os decks da pagina
-           return page.map(deck => {
-             // Se achou o autor que clicamos, força o status para TRUE
-             if (deck.author.id === authorId) {
-                return {
-                    ...deck,
-                    author: {
-                        ...deck.author,
-                        isFollowedByMe: true // <--- A MÁGICA ACONTECE AQUI
-                    }
-                };
-             }
-             return deck;
-           });
+        const newPages = old.pages.map((page: any) => {
+           // CENÁRIO A: Backend devolve Array (Web/Antigo)
+           if (Array.isArray(page)) {
+               return page.map(deck => {
+                   if (deck.author.id === authorId) {
+                       return { ...deck, author: { ...deck.author, isFollowedByMe: true } };
+                   }
+                   return deck;
+               });
+           }
+           
+           // CENÁRIO B: Backend devolve Objeto (Mobile Atual)
+           if (page?.author?.id === authorId) {
+               return { ...page, author: { ...page.author, isFollowedByMe: true } };
+           }
+           return page;
         });
         return { ...old, pages: newPages };
       });
@@ -192,16 +193,15 @@ export const useFollowAuthorInFeed = () => {
       return { previousFeed };
     },
     onError: (err, variables, context) => {
-      // Se der erro, volta como estava
       if (context?.previousFeed) {
         queryClient.setQueryData(['feed', user?.id], context.previousFeed);
       }
+      // Opcional: silenciar o alerta se for erro de concorrência, mas manter para debug
       Alert.alert('Erro', 'Não foi possível seguir.');
     },
     onSettled: () => {
-      // Sincroniza com o servidor depois
       queryClient.invalidateQueries({ queryKey: ['feed'] });
-      queryClient.invalidateQueries({ queryKey: ['following'] }); // Atualiza perfil também
+      queryClient.invalidateQueries({ queryKey: ['following'] }); 
     },
   });
 };
@@ -215,23 +215,25 @@ export const useUnfollowAuthorInFeed = () => {
     onMutate: async (authorId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
-      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(feedKey);
+      const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
 
-      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(feedKey, (old) => {
+      queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
-        const newPages = old.pages.map((page) => {
-           return page.map(deck => {
-             if (deck.author.id === authorId) {
-                return {
-                    ...deck,
-                    author: {
-                        ...deck.author,
-                        isFollowedByMe: false // <--- Força para FALSE instantaneamente
-                    }
-                };
-             }
-             return deck;
-           });
+        const newPages = old.pages.map((page: any) => {
+           // CENÁRIO A: Array
+           if (Array.isArray(page)) {
+               return page.map(deck => {
+                   if (deck.author.id === authorId) {
+                       return { ...deck, author: { ...deck.author, isFollowedByMe: false } };
+                   }
+                   return deck;
+               });
+           }
+           // CENÁRIO B: Objeto
+           if (page?.author?.id === authorId) {
+               return { ...page, author: { ...page.author, isFollowedByMe: false } };
+           }
+           return page;
         });
         return { ...old, pages: newPages };
       });
@@ -251,7 +253,7 @@ export const useUnfollowAuthorInFeed = () => {
   });
 };
 
-// --- COMENTÁRIOS E DELETE ---
+// --- COMENTÁRIOS E DELETE (Mantidos iguais) ---
 export const useCommentOnPost = () => {
   const queryClient = useQueryClient();
   
