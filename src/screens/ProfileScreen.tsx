@@ -7,13 +7,14 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   Settings, MapPin, Pencil, Sparkles, UserPlus, MessageCircle, Ban, ArrowLeft, Check, MoreVertical, LogOut, ShieldAlert, Lock, Calculator, X, Send, Plus, 
-  FileText, Shield 
+  FileText, Shield, Trash2 // Adicionei o Trash2 aqui
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 
 import { toast } from '../lib/toast'; 
 import { useAuth } from '../contexts/AuthContext'; 
+import { api } from '../services/api'; // Importante para chamar o delete
 import {
   useGetMyProfile,
   useGetPublicProfile,
@@ -40,7 +41,6 @@ const CARD_PADDING_H = 16 * 2;
 const CARD_BORDER_W = 2;         
 const AVAILABLE_WIDTH = SCREEN_WIDTH - SCREEN_PADDING_H - CARD_PADDING_H - CARD_BORDER_W;
 const AVATAR_CARD_SIZE = Math.floor((AVAILABLE_WIDTH - (GAP * 2)) / 3);
-// Esta variável já existia aqui, vamos usá-la no componente
 const MAX_CONNECTIONS_HEIGHT = (AVATAR_CARD_SIZE * 2.6) + 60; 
 
 const SendMessageModal = ({ visible, onClose, recipient, onSend, isLoading }: any) => {
@@ -107,7 +107,8 @@ const NatalChartLockModal = ({ visible, onClose, counts, metas }: any) => {
     );
 };
 
-const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
+// --- MENU ATUALIZADO COM BOTÃO EXCLUIR ---
+const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccount }: any) => {
   const { t } = useTranslation();
   if (!visible) return null;
   return (
@@ -138,6 +139,12 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
                 <LogOut size={20} color="#EF4444" style={{marginRight: 10}} />
                 <Text style={[styles.menuText, {color: '#EF4444'}]}>{t('logout')}</Text>
             </TouchableOpacity>
+
+             {/* BOTÃO EXCLUIR CONTA */}
+             <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); if (onDeleteAccount) onDeleteAccount(); }}>
+                <Trash2 size={20} color="#EF4444" style={{marginRight: 10}} />
+                <Text style={[styles.menuText, {color: '#EF4444', fontWeight: 'bold'}]}>{t('delete_account') || 'Excluir Conta'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableWithoutFeedback>
@@ -146,7 +153,7 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked }: any) => {
 };
 
 // --- IDENTITY CARD ---
-const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress }: any) => {
+const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress, onDeleteAccount }: any) => {
     const navigation = useNavigation<any>();
     const { t } = useTranslation();
     const [menuVisible, setMenuVisible] = useState(false);
@@ -196,12 +203,18 @@ const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, on
                     </>
                 )}
             </View>
-            <ProfileMenu visible={menuVisible} onClose={() => setMenuVisible(false)} onLogout={onLogout} onBlocked={() => navigation.navigate('BlockedProfiles')} />
+            <ProfileMenu 
+                visible={menuVisible} 
+                onClose={() => setMenuVisible(false)} 
+                onLogout={onLogout} 
+                onBlocked={() => navigation.navigate('BlockedProfiles')}
+                onDeleteAccount={onDeleteAccount}
+            />
         </View>
     );
 };
 
-// --- CONNECTIONS CARD (CORRIGIDO PARA EVITAR CRASH) ---
+// --- CONNECTIONS CARD (BLINDADO CONTRA CRASH) ---
 const ConnectionsCard = ({ userId }: { userId: string }) => {
     // 1. BLINDAGEM: Se o userId não chegou, retorna null imediatamente.
     if (!userId) return null;
@@ -218,7 +231,7 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
     
     const list = activeTab === 'followers' ? followers : following;
     
-    // Contagem segura (usa optional chaining ?.)
+    // Contagem segura
     const countFollowers = followers?.length || 0;
     const countFollowing = following?.length || 0;
     
@@ -254,7 +267,6 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
                 </TouchableOpacity>
             </View>
 
-            {/* Verifica se a lista existe antes de tentar ler o tamanho */}
             <View style={{ height: (list && list.length > 3) ? MAX_CONNECTIONS_HEIGHT : undefined }}>
                 <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
                     <View style={styles.grid}>
@@ -373,13 +385,12 @@ export default function ProfileScreen() {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isLockModalOpen, setLockModalOpen] = useState(false);
   const [isMessageModalOpen, setMessageModalOpen] = useState(false);
-  const [refreshing, setRefreshing] = useState(false); // Estado para o Pull-to-Refresh
+  const [refreshing, setRefreshing] = useState(false); 
 
   const targetUserId = (route.params as any)?.userId || loggedInUser?.id;
   const isOwner = targetUserId === loggedInUser?.id;
 
   // --- Hooks de Dados ---
-  // Importante: Pegamos o `refetch` para poder atualizar a tela manualmente
   const { 
     data: profileData, 
     isLoading: profileLoading, 
@@ -404,11 +415,10 @@ export default function ProfileScreen() {
   const { mutate: addPhoto, isPending: isUploading } = useAddPhotoToGallery();
   const { mutate: sendMessage, isPending: isSendingMessage } = useCreateOrGetConversation();
 
-  // --- Função de Refresh (Arrastar para Baixo) ---
+  // --- Função de Refresh ---
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-        // Atualiza tudo ao mesmo tempo
         await Promise.all([
             refetchProfile(),
             refetchPhotos(),
@@ -425,6 +435,36 @@ export default function ProfileScreen() {
 
   const handleEdit = () => navigation.navigate('EditProfileScreen' as never);
   const handleLogout = () => { if (signOut) { signOut(); } else { Alert.alert(t('error'), t('error_logout')); } };
+
+  // --- LÓGICA DE EXCLUSÃO DE CONTA (QUARENTENA) ---
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      t('delete_account_title') || 'Excluir Conta',
+      t('delete_account_confirm') || 'Tem certeza? Sua conta ficará em quarentena e poderá ser reativada fazendo login novamente dentro do prazo estipulado.',
+      [
+        { text: t('cancel'), style: 'cancel' },
+        { 
+          text: t('delete_confirm_btn') || 'Confirmar Exclusão', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // 1. Chama a API para iniciar a quarentena no Backend
+              await api.delete('/users/me');
+              
+              toast.success(t('account_deleted_success') || 'Conta desativada com sucesso.');
+              
+              // 2. Faz logout localmente
+              if (signOut) signOut();
+
+            } catch (error) {
+              console.error('Erro ao excluir conta:', error);
+              Alert.alert(t('error'), t('delete_account_error') || 'Não foi possível processar a exclusão. Tente novamente.');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const activePhoto = photosData?.find(p => p.id === selectedPhotoId) || null;
 
@@ -475,7 +515,6 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {!isOwner && <View style={{height: 10}} />}
       
-      {/* ScrollView com RefreshControl */}
       <ScrollView 
         contentContainerStyle={styles.scroll}
         refreshControl={
@@ -483,7 +522,7 @@ export default function ProfileScreen() {
                 refreshing={refreshing}
                 onRefresh={onRefresh}
                 tintColor="#A78BFA"
-                colors={["#A78BFA"]} // Android
+                colors={["#A78BFA"]} 
             />
         }
       >
@@ -494,7 +533,8 @@ export default function ProfileScreen() {
             onOpenQuiz={() => setIsQuizOpen(true)} 
             myId={loggedInUser?.id} 
             onLogout={handleLogout} 
-            onMessagePress={() => setMessageModalOpen(true)} 
+            onMessagePress={() => setMessageModalOpen(true)}
+            onDeleteAccount={handleDeleteAccount} // Passando a função de deletar
         />
         {profileData.behavioralAnswers && profileData.behavioralAnswers.length > 0 && ( <BehavioralRadarChart answers={profileData.behavioralAnswers} sign={sunSign} userId={profileData.userId} isOwner={isOwner} /> )}
         
