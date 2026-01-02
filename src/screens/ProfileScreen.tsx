@@ -7,14 +7,14 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   Settings, MapPin, Pencil, Sparkles, UserPlus, MessageCircle, Ban, ArrowLeft, Check, MoreVertical, LogOut, ShieldAlert, Lock, Calculator, X, Send, Plus, 
-  FileText, Shield, Trash2 // Adicionei o Trash2 aqui
+  FileText, Shield, Trash2, TriangleAlert // Adicionei TriangleAlert para o modal de exclusão
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 
 import { toast } from '../lib/toast'; 
 import { useAuth } from '../contexts/AuthContext'; 
-import { api } from '../services/api'; // Importante para chamar o delete
+import { api } from '../services/api'; 
 import {
   useGetMyProfile,
   useGetPublicProfile,
@@ -42,6 +42,52 @@ const CARD_BORDER_W = 2;
 const AVAILABLE_WIDTH = SCREEN_WIDTH - SCREEN_PADDING_H - CARD_PADDING_H - CARD_BORDER_W;
 const AVATAR_CARD_SIZE = Math.floor((AVAILABLE_WIDTH - (GAP * 2)) / 3);
 const MAX_CONNECTIONS_HEIGHT = (AVATAR_CARD_SIZE * 2.6) + 60; 
+
+// --- NOVO MODAL DE EXCLUSÃO DE CONTA (MAIS BONITO) ---
+const DeleteAccountModal = ({ visible, onClose, onConfirm, isLoading }: any) => {
+    const { t } = useTranslation();
+    if (!visible) return null;
+
+    return (
+        <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <View style={styles.iconCircleRed}>
+                        <TriangleAlert size={32} color="#EF4444" />
+                    </View>
+                    
+                    <Text style={styles.modalTitleDanger}>{t('delete_account') || 'Excluir conta'}</Text>
+                    
+                    <Text style={styles.modalText}>
+                        {t('delete_account_confirm') || 'Tem certeza? Sua conta ficará em quarentena e poderá ser reativada fazendo login novamente dentro do prazo de 30 dias.'}
+                    </Text>
+
+                    <View style={{ width: '100%', gap: 10, marginTop: 10 }}>
+                        <TouchableOpacity 
+                            style={[styles.btnDangerFull, isLoading && { opacity: 0.7 }]} 
+                            onPress={onConfirm}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.btnTextBold}>{t('delete_confirm_btn') || 'Sim, excluir minha conta'}</Text>
+                            )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={styles.btnGrayFull} 
+                            onPress={onClose}
+                            disabled={isLoading}
+                        >
+                            <Text style={styles.btnText}>{t('cancel') || 'Cancelar'}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+};
 
 const SendMessageModal = ({ visible, onClose, recipient, onSend, isLoading }: any) => {
     const { t } = useTranslation();
@@ -107,8 +153,8 @@ const NatalChartLockModal = ({ visible, onClose, counts, metas }: any) => {
     );
 };
 
-// --- MENU ATUALIZADO COM BOTÃO EXCLUIR ---
-const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccount }: any) => {
+// --- MENU (Texto corrigido para "Excluir conta") ---
+const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccountPress }: any) => {
   const { t } = useTranslation();
   if (!visible) return null;
   return (
@@ -140,10 +186,12 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccount }:
                 <Text style={[styles.menuText, {color: '#EF4444'}]}>{t('logout')}</Text>
             </TouchableOpacity>
 
-             {/* BOTÃO EXCLUIR CONTA */}
-             <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); if (onDeleteAccount) onDeleteAccount(); }}>
+             {/* TEXTO CORRIGIDO PARA "Excluir conta" */}
+             <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); if (onDeleteAccountPress) onDeleteAccountPress(); }}>
                 <Trash2 size={20} color="#EF4444" style={{marginRight: 10}} />
-                <Text style={[styles.menuText, {color: '#EF4444', fontWeight: 'bold'}]}>{t('delete_account') || 'Excluir Conta'}</Text>
+                <Text style={[styles.menuText, {color: '#EF4444', fontWeight: 'bold'}]}>
+                    {t('delete_account') || 'Excluir conta'}
+                </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -153,7 +201,7 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccount }:
 };
 
 // --- IDENTITY CARD ---
-const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress, onDeleteAccount }: any) => {
+const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress, onDeleteAccountPress }: any) => {
     const navigation = useNavigation<any>();
     const { t } = useTranslation();
     const [menuVisible, setMenuVisible] = useState(false);
@@ -208,15 +256,14 @@ const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, on
                 onClose={() => setMenuVisible(false)} 
                 onLogout={onLogout} 
                 onBlocked={() => navigation.navigate('BlockedProfiles')}
-                onDeleteAccount={onDeleteAccount}
+                onDeleteAccountPress={onDeleteAccountPress}
             />
         </View>
     );
 };
 
-// --- CONNECTIONS CARD (BLINDADO CONTRA CRASH) ---
+// --- CONNECTIONS CARD ---
 const ConnectionsCard = ({ userId }: { userId: string }) => {
-    // 1. BLINDAGEM: Se o userId não chegou, retorna null imediatamente.
     if (!userId) return null;
 
     const navigation = useNavigation(); 
@@ -225,13 +272,11 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
     
     const [activeTab, setActiveTab] = React.useState<'following' | 'followers'>('following');
     
-    // 2. BLINDAGEM: Garante que as listas sejam arrays vazios [] se undefined
     const { data: followers = [] } = useGetFollowers(userId);
     const { data: following = [] } = useGetFollowing(userId);
     
     const list = activeTab === 'followers' ? followers : following;
     
-    // Contagem segura
     const countFollowers = followers?.length || 0;
     const countFollowing = following?.length || 0;
     
@@ -271,13 +316,11 @@ const ConnectionsCard = ({ userId }: { userId: string }) => {
                 <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
                     <View style={styles.grid}>
                         {(list && list.length > 0) ? list.map((u: any) => {
-                            // 3. BLINDAGEM: Se vier um usuário "quebrado" (nulo) da API, pula ele
                             if (!u || !u.id) return null;
 
                             const isMe = loggedInUser?.id === u.id;
                             const amIFollowing = u.isFollowedByMe ?? false;
                             
-                            // 4. BLINDAGEM DE STRING: Evita o erro do .split se o nome for nulo
                             const rawName = u.name || '';
                             const displayName = rawName ? rawName.split(' ')[0] : t('user_default');
                             
@@ -387,6 +430,10 @@ export default function ProfileScreen() {
   const [isMessageModalOpen, setMessageModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false); 
 
+  // NOVO ESTADO: Controle do modal de delete
+  const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const targetUserId = (route.params as any)?.userId || loggedInUser?.id;
   const isOwner = targetUserId === loggedInUser?.id;
 
@@ -415,7 +462,6 @@ export default function ProfileScreen() {
   const { mutate: addPhoto, isPending: isUploading } = useAddPhotoToGallery();
   const { mutate: sendMessage, isPending: isSendingMessage } = useCreateOrGetConversation();
 
-  // --- Função de Refresh ---
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -436,34 +482,25 @@ export default function ProfileScreen() {
   const handleEdit = () => navigation.navigate('EditProfileScreen' as never);
   const handleLogout = () => { if (signOut) { signOut(); } else { Alert.alert(t('error'), t('error_logout')); } };
 
-  // --- LÓGICA DE EXCLUSÃO DE CONTA (QUARENTENA) ---
-  const handleDeleteAccount = async () => {
-    Alert.alert(
-      t('delete_account_title') || 'Excluir Conta',
-      t('delete_account_confirm') || 'Tem certeza? Sua conta ficará em quarentena e poderá ser reativada fazendo login novamente dentro do prazo estipulado.',
-      [
-        { text: t('cancel'), style: 'cancel' },
-        { 
-          text: t('delete_confirm_btn') || 'Confirmar Exclusão', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // 1. Chama a API para iniciar a quarentena no Backend
-              await api.delete('/users/me');
-              
-              toast.success(t('account_deleted_success') || 'Conta desativada com sucesso.');
-              
-              // 2. Faz logout localmente
-              if (signOut) signOut();
+  // --- FUNÇÃO QUE CONFIRMA A EXCLUSÃO ---
+  const handleConfirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      // 1. Chama a API para iniciar a quarentena no Backend
+      await api.delete('/users/me');
+      
+      setDeleteModalOpen(false);
+      toast.success(t('account_deleted_success') || 'Conta desativada com sucesso.');
+      
+      // 2. Faz logout localmente
+      if (signOut) signOut();
 
-            } catch (error) {
-              console.error('Erro ao excluir conta:', error);
-              Alert.alert(t('error'), t('delete_account_error') || 'Não foi possível processar a exclusão. Tente novamente.');
-            }
-          }
-        }
-      ]
-    );
+    } catch (error) {
+      console.error('Erro ao excluir conta:', error);
+      Alert.alert(t('error'), t('delete_account_error') || 'Erro ao processar solicitação.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const activePhoto = photosData?.find(p => p.id === selectedPhotoId) || null;
@@ -534,7 +571,7 @@ export default function ProfileScreen() {
             myId={loggedInUser?.id} 
             onLogout={handleLogout} 
             onMessagePress={() => setMessageModalOpen(true)}
-            onDeleteAccount={handleDeleteAccount} // Passando a função de deletar
+            onDeleteAccountPress={() => setDeleteModalOpen(true)} // Abre o novo modal
         />
         {profileData.behavioralAnswers && profileData.behavioralAnswers.length > 0 && ( <BehavioralRadarChart answers={profileData.behavioralAnswers} sign={sunSign} userId={profileData.userId} isOwner={isOwner} /> )}
         
@@ -564,6 +601,14 @@ export default function ProfileScreen() {
       />
       
       <SendMessageModal visible={isMessageModalOpen} onClose={() => setMessageModalOpen(false)} recipient={profileData} onSend={handleSendMessage} isLoading={isSendingMessage} />
+      
+      {/* NOVO MODAL INTEGRADO */}
+      <DeleteAccountModal 
+        visible={isDeleteModalOpen} 
+        onClose={() => setDeleteModalOpen(false)} 
+        onConfirm={handleConfirmDelete}
+        isLoading={isDeleting}
+      />
     </SafeAreaView>
   );
 }
@@ -586,12 +631,15 @@ const styles = StyleSheet.create({
   btnPrimary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#4F46E5', paddingVertical: 10, borderRadius: 8 },
   btnPurpleFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#A855F7', padding: 12, borderRadius: 8, width: '100%' },
   btnPrimaryFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#4F46E5', paddingVertical: 12, borderRadius: 8, width: '100%', marginTop: 20 },
+  btnDangerFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#DC2626', paddingVertical: 12, borderRadius: 8, width: '100%' },
+  btnGrayFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#374151', paddingVertical: 12, borderRadius: 8, width: '100%' },
   btnOutlined: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#4B5563' },
   btnSecondary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#9333EA', paddingVertical: 10, borderRadius: 8 },
   btnGray: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#374151', paddingVertical: 10, borderRadius: 8 },
   btnIcon: { padding: 10, backgroundColor: '#374151', borderRadius: 8 },
   btnIconDanger: { padding: 10, backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.5)' },
   btnText: { color: '#FFF', fontWeight: '600', fontSize: 14 },
+  btnTextBold: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
   tabsRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#374151', marginBottom: 16 },
   tabItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
   activeTab: { borderBottomColor: '#818CF8' },
@@ -623,6 +671,7 @@ const styles = StyleSheet.create({
   modalContent: { width: '100%', backgroundColor: '#1F2937', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
   modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: 16 },
   modalTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
+  modalTitleDanger: { color: '#EF4444', fontSize: 20, fontWeight: 'bold', marginVertical: 12 },
   modalText: { color: '#D1D5DB', textAlign: 'center', marginBottom: 20 },
   recipientBox: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 16, backgroundColor: '#374151', padding: 8, borderRadius: 8 },
   recipientAvatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
@@ -637,5 +686,6 @@ const styles = StyleSheet.create({
   textYellow: { color: '#FBBF24' },
   uploadOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
   uploadBox: { backgroundColor: '#1F2937', padding: 24, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#374151' },
-  uploadText: { color: '#FFF', marginTop: 12, fontWeight: 'bold' }
+  uploadText: { color: '#FFF', marginTop: 12, fontWeight: 'bold' },
+  iconCircleRed: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(239, 68, 68, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 8 }
 });
