@@ -43,9 +43,8 @@ const AVAILABLE_WIDTH = SCREEN_WIDTH - SCREEN_PADDING_H - CARD_PADDING_H - CARD_
 const AVATAR_CARD_SIZE = Math.floor((AVAILABLE_WIDTH - (GAP * 2)) / 3);
 const MAX_CONNECTIONS_HEIGHT = (AVATAR_CARD_SIZE * 2.6) + 60; 
 
-// --- NOVO MODAL DE EXCLUSÃO (CORRIGIDO CRASH DE ÍCONE) ---
+// --- MODAL DE EXCLUSÃO ---
 const DeleteAccountModal = ({ visible, onClose, onConfirm, isLoading }: any) => {
-    // Usamos Trash2 aqui pois sabemos que ele existe e não vai quebrar o app
     if (!visible) return null;
 
     return (
@@ -153,8 +152,8 @@ const NatalChartLockModal = ({ visible, onClose, counts, metas }: any) => {
     );
 };
 
-// --- MENU (CORRIGIDO TEXTO "EXCLUIR CONTA") ---
-const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccount }: any) => {
+// --- MENU ---
+const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccountPress }: any) => {
   const { t } = useTranslation();
   if (!visible) return null;
   return (
@@ -186,8 +185,7 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccount }:
                 <Text style={[styles.menuText, {color: '#EF4444'}]}>{t('logout')}</Text>
             </TouchableOpacity>
 
-             {/* TEXTO FORÇADO EM PORTUGUÊS PARA EVITAR ERRO DE TRADUÇÃO */}
-             <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); if (onDeleteAccount) onDeleteAccount(); }}>
+             <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); if (onDeleteAccountPress) onDeleteAccountPress(); }}>
                 <Trash2 size={20} color="#EF4444" style={{marginRight: 10}} />
                 <Text style={[styles.menuText, {color: '#EF4444', fontWeight: 'bold'}]}>
                     Excluir conta
@@ -201,7 +199,7 @@ const ProfileMenu = ({ visible, onClose, onLogout, onBlocked, onDeleteAccount }:
 };
 
 // --- IDENTITY CARD ---
-const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress, onDeleteAccount }: any) => {
+const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, onMessagePress, onDeleteAccountPress }: any) => {
     const navigation = useNavigation<any>();
     const { t } = useTranslation();
     const [menuVisible, setMenuVisible] = useState(false);
@@ -256,7 +254,7 @@ const IdentityCard = ({ profile, isOwner, onEdit, onOpenQuiz, myId, onLogout, on
                 onClose={() => setMenuVisible(false)} 
                 onLogout={onLogout} 
                 onBlocked={() => navigation.navigate('BlockedProfiles')}
-                onDeleteAccount={onDeleteAccount}
+                onDeleteAccountPress={onDeleteAccountPress}
             />
         </View>
     );
@@ -482,19 +480,21 @@ export default function ProfileScreen() {
   const handleEdit = () => navigation.navigate('EditProfileScreen' as never);
   const handleLogout = () => { if (signOut) { signOut(); } else { Alert.alert(t('error'), t('error_logout')); } };
 
-  // --- FUNÇÃO QUE CONFIRMA A EXCLUSÃO ---
+  // --- SOLUÇÃO DO BLOQUEIO: ABRIR MODAL COM DELAY ---
+  const handleOpenDeleteModal = () => {
+    // Espera 500ms para garantir que o menu fechou antes de abrir o novo modal
+    setTimeout(() => {
+        setDeleteModalOpen(true);
+    }, 500);
+  };
+
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     try {
-      // 1. Chama a API para iniciar a quarentena no Backend
       await api.delete('/users/me');
-      
       setDeleteModalOpen(false);
       toast.success('Conta desativada com sucesso.');
-      
-      // 2. Faz logout localmente
       if (signOut) signOut();
-
     } catch (error) {
       console.error('Erro ao excluir conta:', error);
       Alert.alert(t('error'), 'Erro ao processar solicitação.');
@@ -571,7 +571,7 @@ export default function ProfileScreen() {
             myId={loggedInUser?.id} 
             onLogout={handleLogout} 
             onMessagePress={() => setMessageModalOpen(true)}
-            onDeleteAccount={() => setDeleteModalOpen(true)} // ABERTURA DO MODAL
+            onDeleteAccountPress={handleOpenDeleteModal} // USANDO A FUNÇÃO COM DELAY
         />
         {profileData.behavioralAnswers && profileData.behavioralAnswers.length > 0 && ( <BehavioralRadarChart answers={profileData.behavioralAnswers} sign={sunSign} userId={profileData.userId} isOwner={isOwner} /> )}
         
@@ -602,7 +602,6 @@ export default function ProfileScreen() {
       
       <SendMessageModal visible={isMessageModalOpen} onClose={() => setMessageModalOpen(false)} recipient={profileData} onSend={handleSendMessage} isLoading={isSendingMessage} />
       
-      {/* NOVO MODAL INTEGRADO */}
       <DeleteAccountModal 
         visible={isDeleteModalOpen} 
         onClose={() => setDeleteModalOpen(false)} 
