@@ -2,7 +2,7 @@
   "expo": {
     "name": "CosmosMatch",
     "slug": "cosmosmatch",
-    "version": "1.0.30",
+    "version": "1.0.31",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -17,14 +17,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cosmosmatch.app",
-      "buildNumber": "70",
+      "buildNumber": "71",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.cosmosmatch.app",
-      "versionCode": 70,
+      "versionCode": 71,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -32,7 +32,10 @@
       },
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -59,20 +62,23 @@
             "compileSdkVersion": 35,
             "targetSdkVersion": 35,
             "buildToolsVersion": "35.0.0"
+          },
+          "ios": {
+            "useFrameworks": "static"
           }
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Precisamos acessar a sua galeria para você escolher fotos de perfil e posts.",
-          "cameraPermission": "Precisamos da câmara para você tirar fotos para o seu perfil e criar posts."
+          "photosPermission": "O CosmosMatch precisa de acesso às suas fotos para você personalizar seu perfil e compartilhar momentos.",
+          "cameraPermission": "O CosmosMatch precisa acessar sua câmera para capturar fotos e vídeos em tempo real."
         }
       ],
       [
         "expo-av",
         {
-          "microphonePermission": "Permitir que o CosmosMatch use o microfone para gravar áudio nos vídeos."
+          "microphonePermission": "Permitir que o CosmosMatch use o microfone para gravar áudio em seus vídeos."
         }
       ]
     ],

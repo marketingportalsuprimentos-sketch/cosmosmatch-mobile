@@ -1,124 +1,89 @@
-import React from 'react';
-import { 
-  View, Text, Image, StyleSheet, Dimensions, TouchableOpacity, Platform 
-} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Image, StyleSheet, Dimensions, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLikePost, useUnlikePost } from '@/features/feed/hooks/useFeed';
 import { FeedPost, MediaType } from '@/types/feed.types';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-interface FeedPostCardProps {
-  post: FeedPost;
-  author: { id: string; name: string; profile?: { imageUrl?: string | null } };
-  isActive: boolean;
-  isFollowedByMe: boolean; 
-  onShare?: () => void;
-  onOptions?: () => void;
-  onOpenComments?: () => void;
-  onFollow?: () => void; 
-}
-
-export const FeedPostCard: React.FC<FeedPostCardProps> = ({ 
-  post, 
-  author, 
-  isActive, 
-  isFollowedByMe, 
-  onShare,
-  onOptions,
-  onOpenComments,
-  onFollow,
-}) => {
+export const FeedPostCard = ({ post, author, isActive, isFollowedByMe, onShare, onOptions, onDelete, onOpenComments, onFollow }) => {
   const { user } = useAuth();
+  const videoRef = useRef(null);
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
+  const { mutate: likePost } = useLikePost();
+  const { mutate: unlikePost } = useUnlikePost();
+
   const isOwner = user?.id === author.id;
 
-  // Proteção para evitar o crash: Se não houver imagem, usamos uma cor de fundo sólida
-  // em vez de tentar um require que falha na build.
-  const avatarSource = author.profile?.imageUrl 
-    ? { uri: author.profile.imageUrl } 
-    : null;
+  useEffect(() => {
+    if (post.mediaType === MediaType.VIDEO && videoRef.current) {
+      if (isActive) videoRef.current.playAsync();
+      else videoRef.current.pauseAsync();
+    }
+  }, [isActive]);
 
   return (
     <View style={styles.container}>
-      {post.mediaType === MediaType.VIDEO ? (
-        <Video
-          source={{ uri: post.imageUrl }}
-          style={styles.media}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay={isActive}
-          isLooping
-          isMuted={false}
-        />
-      ) : (
-        <Image source={{ uri: post.imageUrl }} style={styles.media} resizeMode="cover" />
-      )}
-
-      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.gradient} />
+      <View style={styles.mediaContainer}>
+        {post.mediaType === MediaType.VIDEO ? (
+          <Video
+            ref={videoRef}
+            source={{ uri: post.imageUrl }}
+            style={styles.media}
+            resizeMode={ResizeMode.CONTAIN}
+            isLooping
+            shouldPlay={isActive}
+            onLoad={() => setIsVideoLoaded(true)}
+          />
+        ) : (
+          <Image source={{ uri: post.imageUrl }} style={styles.media} resizeMode="contain" />
+        )}
+      </View>
 
       <View style={styles.sideActions}>
-        <View style={styles.followButtonContainer}>
-          <TouchableOpacity activeOpacity={0.8} onPress={onFollow}>
-            <View style={[styles.followAvatar, { backgroundColor: '#374151', overflow: 'hidden' }]}>
-              {avatarSource ? (
-                <Image source={avatarSource} style={StyleSheet.absoluteFill} />
-              ) : (
-                <Ionicons name="person" size={24} color="#9CA3AF" style={{ marginTop: 10, marginLeft: 10 }} />
-              )}
-            </View>
-          </TouchableOpacity>
-          
-          {!isOwner && (
-            <TouchableOpacity 
-              style={[
-                styles.followBadge, 
-                { backgroundColor: isFollowedByMe ? '#10B981' : '#8B5CF6' } 
-              ]} 
-              onPress={onFollow}
-            >
-              <Ionicons 
-                name={isFollowedByMe ? "checkmark" : "add"} 
-                size={14} 
-                color="white" 
+        {!isOwner && (
+          <TouchableOpacity onPress={onFollow} style={styles.followButtonContainer}>
+              <Image 
+                source={{ uri: author.profile?.imageUrl || 'https://via.placeholder.com/50' }} 
+                style={styles.followAvatar} 
               />
-            </TouchableOpacity>
-          )}
-        </View>
+              <View style={[styles.followBadge, { backgroundColor: isFollowedByMe ? 'white' : '#EC4899' }]}>
+                  <Ionicons name={isFollowedByMe ? "remove" : "add"} size={12} color={isFollowedByMe ? "black" : "white"} />
+              </View>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity style={styles.actionButton} onPress={() => post.isLikedByMe ? unlikePost(post.id) : likePost(post.id)}>
+          <Ionicons name={post.isLikedByMe ? "heart" : "heart-outline"} size={35} color={post.isLikedByMe ? "#ef4444" : "white"} />
+          <Text style={styles.actionText}>{post.likesCount}</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={onOpenComments}>
-          <Ionicons name="chatbubble-outline" size={32} color="white" />
-          <Text style={styles.actionText}>{post.commentsCount || 0}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton} onPress={onShare}>
-          <Ionicons name="share-social-outline" size={32} color="white" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton} onPress={onOptions}>
-          <Ionicons name="ellipsis-horizontal" size={28} color="white" />
+          <Ionicons name="chatbubble-ellipses" size={32} color="white" />
+          <Text style={styles.actionText}>{post.commentsCount}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.bottomInfo}>
-        <Text style={styles.authorName}>@{author.name}</Text>
-        {post.content && <Text style={styles.caption} numberOfLines={2}>{post.content}</Text>}
-      </View>
+      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={styles.bottomOverlay}>
+        <Text style={styles.content} numberOfLines={3}>{post.content}</Text>
+      </LinearGradient>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, backgroundColor: 'black' },
-  media: { ...StyleSheet.absoluteFillObject },
-  gradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 300 },
+  mediaContainer: { width: '100%', height: '100%', position: 'absolute' },
+  media: { width: '100%', height: '100%' },
   sideActions: { position: 'absolute', right: 10, bottom: 120, alignItems: 'center', gap: 20, zIndex: 100 },
   followButtonContainer: { marginBottom: 15, alignItems: 'center', position: 'relative' },
-  followAvatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: 'white' },
-  followBadge: { position: 'absolute', bottom: -5, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'black' },
+  followAvatar: { width: 45, height: 45, borderRadius: 22.5, borderWidth: 1, borderColor: 'white' },
+  followBadge: { position: 'absolute', bottom: -8, width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   actionButton: { alignItems: 'center' },
   actionText: { color: 'white', fontSize: 12, fontWeight: '600', marginTop: 4 },
-  bottomInfo: { position: 'absolute', left: 16, bottom: 40, right: 80 },
-  authorName: { color: 'white', fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
-  caption: { color: 'white', fontSize: 14 },
+  bottomOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: 90, paddingTop: 40 },
+  content: { color: 'white', fontSize: 15 }
 });
