@@ -38,35 +38,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // 1. Validação Inicial do Token
+  // 1. Validação do utilizador e sessão
   useEffect(() => {
     let isMounted = true;
-    const validateToken = async () => {
+    const initAuth = async () => {
       try {
         const token = await storage.getToken();
-        
         if (token) {
-          try {
-            const response = await api.get<AuthUser>('/auth/me'); 
-            if (isMounted) setUserState(response.data);
-          } catch (error: any) {
-            if ([401, 403, 404].includes(error.response?.status)) {
-                await storage.removeToken();
-                if (isMounted) setUserState(null);
-            }
-          }
+          const { data } = await api.get('/auth/me');
+          if (isMounted) setUserState(data);
         }
-      } catch (err) {
-        console.error('Erro na validação:', err);
+      } catch (error) {
+        // Só remove se for erro de autenticação real
+        const status = (error as any).response?.status;
+        if (status === 401 || status === 403) {
+          await storage.removeToken();
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
     };
-    validateToken();
+    initAuth();
     return () => { isMounted = false; };
   }, []);
 
-  // 2. Gestão do Socket com Reconexão
+  // 2. Gestão do Socket - Ajustado para evitar desconexões no iOS
   useEffect(() => {
     if (!user) {
       if (socket) {
@@ -76,87 +72,92 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    let socketInstance: Socket | null = null;
+
     const connectSocket = async () => {
       const token = await storage.getToken();
-      if (!token || socket) return;
+      if (!token) return;
 
-      const newSocket = io(ENV.SOCKET_URL || ENV.API_URL, {
+      // Se já houver um socket conectado, não cria outro
+      if (socketInstance?.connected) return;
+
+      socketInstance = io(ENV.API_URL, {
         auth: { token },
-        transports: ['websocket'],
+        transports: ['websocket'], // Essencial para estabilidade no iOS
         reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 3000,
+        reconnectionAttempts: 20,
+        reconnectionDelay: 2000,
       });
 
-      newSocket.on('connect', () => console.log('Socket Conectado!'));
-      newSocket.on('disconnect', () => setSocket(null));
+      socketInstance.on('connect', () => {
+        console.log('Socket conectado');
+        setSocket(socketInstance);
+      });
 
-      setSocket(newSocket);
+      socketInstance.on('disconnect', (reason) => {
+        console.log('Socket desconectado:', reason);
+        if (reason === 'io server disconnect') {
+          socketInstance?.connect();
+        }
+      });
     };
 
     connectSocket();
 
     return () => {
-      if (socket) socket.disconnect();
+      if (socketInstance) {
+        socketInstance.disconnect();
+        setSocket(null);
+      }
     };
   }, [user]);
 
-  // 3. Funções de Autenticação (Nomes de funções do storage corrigidos)
+  // 3. Funções de Auth mantendo os teus métodos originais (setToken)
   const signIn = useCallback(async (email, password) => {
-    queryClient.clear();
     const response = await api.post('/auth/login', { email, password });
-    const { token, user: userData } = response.data; // userData para evitar conflito de nome
+    const { token, user: userData } = response.data;
 
-    await storage.setToken(token); // CORRIGIDO: de saveToken para setToken
-    setUserState(userData);
+    // Uso rigoroso do teu método setToken para evitar o erro de string no SecureStore
+    if (typeof token === 'string') {
+      await storage.setToken(token);
+      setUserState(userData);
+      queryClient.clear();
+    } else {
+      console.error("Erro: Token recebido não é uma string.");
+    }
   }, [queryClient]);
 
-  const reactivateAccount = useCallback(async (credentials: { email: string; password: string }) => {
-    queryClient.clear();
+  const reactivateAccount = useCallback(async (credentials) => {
     const response = await api.post('/auth/reactivate', credentials);
     const { token, user: userData } = response.data;
 
-    await storage.setToken(token); // CORRIGIDO: de saveToken para setToken
-    setUserState(userData);
+    if (typeof token === 'string') {
+      await storage.setToken(token);
+      setUserState(userData);
+      queryClient.clear();
+    }
   }, [queryClient]);
 
   const logout = useCallback(async () => {
-    await storage.removeToken();
     if (socket) socket.disconnect();
+    await storage.removeToken();
     setSocket(null);
-    queryClient.clear();
     setUserState(null);
-  }, [queryClient, socket]);
-
-  const setUser = useCallback(
-    (action: SetStateAction<AuthUser | null>) => {
-        if (typeof action === 'function') {
-            setUserState(action);
-        } else {
-            setUserState(action);
-            if (!action) queryClient.clear();
-        }
-    },
-    [queryClient],
-  );
+    queryClient.clear();
+  }, [socket, queryClient]);
 
   const incrementFreeContactsUsed = useCallback(() => {
-    setUserState((currentUser) => {
-      if (!currentUser?.subscription || currentUser.subscription.status !== 'FREE') return currentUser;
+    setUserState((curr) => {
+      if (!curr?.subscription || curr.subscription.status !== 'FREE') return curr;
       return {
-        ...currentUser,
+        ...curr,
         subscription: {
-          ...currentUser.subscription,
-          freeContactsUsed: (currentUser.subscription.freeContactsUsed || 0) + 1,
+          ...curr.subscription,
+          freeContactsUsed: (curr.subscription.freeContactsUsed || 0) + 1,
         },
       };
     });
   }, []);
-
-  const value = {
-    user, setUser, isLoading, signIn, reactivateAccount,
-    logout, signOut: logout, incrementFreeContactsUsed, socket,
-  };
 
   if (isLoading) {
     return (
@@ -166,11 +167,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ 
+      user, 
+      setUser: setUserState, 
+      isLoading, 
+      signIn, 
+      reactivateAccount, 
+      logout, 
+      signOut: logout, 
+      incrementFreeContactsUsed, 
+      socket 
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) throw new Error('useAuth deve ser usado dentro de um AuthProvider');
+  if (!context) throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   return context;
 };

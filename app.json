@@ -17,14 +17,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cosmosmatch.app",
-      "buildNumber": "56",
+      "buildNumber": "58",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.cosmosmatch.app",
-      "versionCode": 56,
+      "versionCode": 58,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -78,8 +78,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "38e7d90e-1500-43a1-97c7-55ed467a6e19"
+        "projectId": "38e7d90e-1500-43a1-97c7-55ed467a6905"
       }
-    }
+    },
+    "owner": "ccarvalhobatitsa"
   }
 }
