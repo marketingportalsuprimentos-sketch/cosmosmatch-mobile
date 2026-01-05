@@ -54,14 +54,13 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({
       <View style={styles.sideActions}>
         <View style={styles.followButtonContainer}>
           <TouchableOpacity activeOpacity={0.8}>
-            <Image 
-              source={
-                author.profile?.imageUrl 
-                  ? { uri: author.profile.imageUrl } 
-                  : require('@/assets/icon.png')
-              } 
-              style={styles.followAvatar} 
-            />
+            {author.profile?.imageUrl ? (
+              <Image source={{ uri: author.profile.imageUrl }} style={styles.followAvatar} />
+            ) : (
+              <View style={[styles.followAvatar, { backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="person" size={24} color="#9CA3AF" />
+              </View>
+            )}
           </TouchableOpacity>
           
           {!isOwner && (
