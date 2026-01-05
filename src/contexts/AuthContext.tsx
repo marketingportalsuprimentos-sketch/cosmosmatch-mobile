@@ -1,5 +1,3 @@
-// mobile/src/contexts/AuthContext.tsx
-
 import React, {
   createContext,
   useContext,
@@ -38,7 +36,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // 1. Validação do utilizador e sessão
+  // 1. Validação de Sessão ao Iniciar
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
@@ -49,11 +47,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (isMounted) setUserState(data);
         }
       } catch (error) {
-        // Só remove se for erro de autenticação real
-        const status = (error as any).response?.status;
-        if (status === 401 || status === 403) {
-          await storage.removeToken();
-        }
+        await storage.removeToken();
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -62,7 +56,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { isMounted = false; };
   }, []);
 
-  // 2. Gestão do Socket - Ajustado para evitar desconexões no iOS
+  // 2. Gestão do Socket (Estabilidade para iOS/TestFlight)
   useEffect(() => {
     if (!user) {
       if (socket) {
@@ -72,69 +66,59 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    let socketInstance: Socket | null = null;
-
     const connectSocket = async () => {
       const token = await storage.getToken();
       if (!token) return;
 
-      // Se já houver um socket conectado, não cria outro
-      if (socketInstance?.connected) return;
-
-      socketInstance = io(ENV.API_URL, {
+      const newSocket = io(ENV.API_URL, {
         auth: { token },
-        transports: ['websocket'], // Essencial para estabilidade no iOS
+        transports: ['websocket'],
         reconnection: true,
-        reconnectionAttempts: 20,
-        reconnectionDelay: 2000,
       });
 
-      socketInstance.on('connect', () => {
-        console.log('Socket conectado');
-        setSocket(socketInstance);
-      });
-
-      socketInstance.on('disconnect', (reason) => {
-        console.log('Socket desconectado:', reason);
-        if (reason === 'io server disconnect') {
-          socketInstance?.connect();
-        }
-      });
+      newSocket.on('connect', () => setSocket(newSocket));
+      newSocket.on('disconnect', () => setSocket(null));
     };
 
     connectSocket();
-
-    return () => {
-      if (socketInstance) {
-        socketInstance.disconnect();
-        setSocket(null);
-      }
-    };
+    return () => { if (socket) socket.disconnect(); };
   }, [user]);
 
-  // 3. Funções de Auth mantendo os teus métodos originais (setToken)
+  // 3. Função de Login corrigida para evitar o erro do SecureStore
   const signIn = useCallback(async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
-    const { token, user: userData } = response.data;
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      
+      if (!response.data || !response.data.token) {
+        throw new Error('Servidor não retornou um token válido.');
+      }
 
-    // Uso rigoroso do teu método setToken para evitar o erro de string no SecureStore
-    if (typeof token === 'string') {
-      await storage.setToken(token);
+      const { token, user: userData } = response.data;
+
+      // PROTEÇÃO: Garante que o token é string para o storage.setToken
+      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+      
+      await storage.setToken(tokenString); // Usa o teu método do storage.ts
+      
       setUserState(userData);
       queryClient.clear();
-    } else {
-      console.error("Erro: Token recebido não é uma string.");
+    } catch (error) {
+      console.error("Erro no AuthContext (signIn):", error);
+      throw error; // Repassa o erro para a LoginScreen mostrar o Alerta
     }
   }, [queryClient]);
 
   const reactivateAccount = useCallback(async (credentials) => {
-    const response = await api.post('/auth/reactivate', credentials);
-    const { token, user: userData } = response.data;
-
-    if (typeof token === 'string') {
-      await storage.setToken(token);
+    try {
+      const response = await api.post('/auth/reactivate', credentials);
+      const { token, user: userData } = response.data;
+      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+      
+      await storage.setToken(tokenString);
       setUserState(userData);
       queryClient.clear();
+    } catch (error) {
+      throw error;
     }
   }, [queryClient]);
 
@@ -169,15 +153,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ 
-      user, 
-      setUser: setUserState, 
-      isLoading, 
-      signIn, 
-      reactivateAccount, 
-      logout, 
-      signOut: logout, 
-      incrementFreeContactsUsed, 
-      socket 
+      user, setUser: setUserState, isLoading, signIn, reactivateAccount, 
+      logout, signOut: logout, incrementFreeContactsUsed, socket 
     }}>
       {children}
     </AuthContext.Provider>
