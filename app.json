@@ -2,7 +2,7 @@
   "expo": {
     "name": "CosmosMatch",
     "slug": "cosmosmatch",
-    "version": "1.0.23",
+    "version": "1.0.24",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -17,14 +17,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cosmosmatch.app",
-      "buildNumber": "55",
+      "buildNumber": "56",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.cosmosmatch.app",
-      "versionCode": 55,
+      "versionCode": 56,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -77,14 +77,8 @@
       ]
     ],
     "extra": {
-      "expo-navigation-bar": {
-        "position": "absolute",
-        "visibility": "hidden",
-        "behavior": "overlay-swipe",
-        "backgroundColor": "#00000000"
-      },
       "eas": {
-        "projectId": "38e7d90e-1500-43a1-97c7-55ed467a6905"
+        "projectId": "19e05781-8b3d-495f-9721-a20ce913f02d"
       }
     }
   }

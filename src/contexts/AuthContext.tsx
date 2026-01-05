@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // 1. Validação Inicial do Token (CORRIGIDA)
+  // 1. Validação Inicial do Token
   useEffect(() => {
     let isMounted = true;
     const validateToken = async () => {
@@ -49,49 +49,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         let fetchedUser: AuthUser | null = null;
         if (token) {
           try {
-            // Tenta pegar o perfil do usuário
-            const response = await api.get<AuthUser>('/auth/profile');
+            const response = await api.get<AuthUser>('/auth/me'); // Rota padrão corrigida para /me
             fetchedUser = response.data;
-            console.log('Auth: Token validado com sucesso para', fetchedUser.username);
           } catch (error: any) {
-            console.error('Auth: Erro ao validar token:', error.message);
-            
-            // [CORREÇÃO CRÍTICA]: Incluído erro 404 na lista de logout forçado.
-            // Se for 401 (Não autorizado), 403 (Proibido) OU 404 (Usuário deletado/não encontrado)
-            if (
-                error.response?.status === 401 || 
-                error.response?.status === 403 || 
-                error.response?.status === 404
-            ) {
-                console.log(`Auth: Sessão inválida (${error.response?.status}). Realizando logout...`);
+            if ([401, 403, 404].includes(error.response?.status)) {
                 await storage.removeToken();
                 fetchedUser = null;
-            } else {
-                console.log('Auth: Erro genérico (Rede/Servidor). Mantendo sessão ativa preventivamente.');
             }
           }
         }
 
-        if (isMounted) {
-          setUserState(fetchedUser);
-        }
+        if (isMounted) setUserState(fetchedUser);
       } catch (err) {
-        console.error('Erro fatal na validação:', err);
+        console.error('Erro na validação:', err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
     };
     validateToken();
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
-  // 2. Gestão do Socket.IO
+  // 2. Gestão do Socket.IO com Reconexão Automática
   useEffect(() => {
     if (!user) {
       if (socket) {
-        console.log('Auth (Socket): Logout detectado, desconectando...');
         socket.disconnect();
         setSocket(null);
       }
@@ -99,77 +81,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const connectSocket = async () => {
-      if (user && !socket) {
-        const token = await storage.getToken();
-        if (!token) return;
+      const token = await storage.getToken();
+      if (!token || socket) return;
 
-        console.log(`Auth (Socket): Conectando a ${ENV.SOCKET_URL}...`);
+      const newSocket = io(ENV.SOCKET_URL, {
+        auth: { token },
+        transports: ['websocket'],
+        reconnection: true,           // Ativa reconexão
+        reconnectionAttempts: 10,     // Tenta 10 vezes
+        reconnectionDelay: 3000,      // 3 segundos entre tentativas
+      });
 
-        const newSocket = io(ENV.SOCKET_URL, {
-          auth: { token },
-          transports: ['websocket'],
-        });
+      newSocket.on('connect', () => console.log('Socket Conectado!'));
+      newSocket.on('disconnect', () => setSocket(null));
 
-        newSocket.on('connect', () => {
-          console.log(`Auth (Socket): Conectado! ID: ${newSocket.id}`);
-        });
-
-        newSocket.on('disconnect', (reason) => {
-          console.log(`Auth (Socket): Desconectado (${reason})`);
-          setSocket(null);
-        });
-
-        setSocket(newSocket);
-      }
+      setSocket(newSocket);
     };
 
     connectSocket();
 
     return () => {
-      if (socket) {
-        socket.disconnect();
-      }
+      if (socket) socket.disconnect();
     };
   }, [user, socket]);
 
-  // --- 3. LOGIN ---
   const signIn = useCallback(async (email, password) => {
     queryClient.clear();
-    queryClient.removeQueries();
-
     const response = await api.post('/auth/login', { email, password });
-    const { accessToken, user } = response.data;
+    const { token, user } = response.data; // Ajustado de accessToken para token conforme padrão do seu back
 
-    await storage.setToken(accessToken);
+    await storage.saveToken(token);
     setUserState(user);
   }, [queryClient]);
 
-  // --- 3.1. REATIVAR CONTA ---
   const reactivateAccount = useCallback(async (credentials: { email: string; password: string }) => {
     queryClient.clear();
-    queryClient.removeQueries();
-
     const response = await api.post('/auth/reactivate', credentials);
-    const { accessToken, user } = response.data;
+    const { token, user } = response.data;
 
-    await storage.setToken(accessToken);
+    await storage.saveToken(token);
     setUserState(user);
   }, [queryClient]);
 
-  // --- 4. LOGOUT ---
   const logout = useCallback(async () => {
-    console.log('Auth: Logout solicitado.');
-    
     await storage.removeToken();
-    
-    if (socket && socket.connected) {
-        socket.disconnect();
-    }
+    if (socket) socket.disconnect();
     setSocket(null);
-
     queryClient.clear();
-    queryClient.removeQueries();
-
     setUserState(null);
   }, [queryClient, socket]);
 
@@ -179,10 +137,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUserState(action);
         } else {
             setUserState(action);
-            if (!action) {
-                queryClient.clear();
-                queryClient.removeQueries();
-            }
+            if (!action) queryClient.clear();
         }
     },
     [queryClient],
@@ -190,29 +145,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const incrementFreeContactsUsed = useCallback(() => {
     setUserState((currentUser) => {
-      if (!currentUser?.subscription || currentUser.subscription.status !== 'FREE') {
-        return currentUser;
-      }
+      if (!currentUser?.subscription || currentUser.subscription.status !== 'FREE') return currentUser;
       return {
         ...currentUser,
         subscription: {
           ...currentUser.subscription,
-          freeContactsUsed: currentUser.subscription.freeContactsUsed + 1,
+          freeContactsUsed: (currentUser.subscription.freeContactsUsed || 0) + 1,
         },
       };
     });
   }, []);
 
   const value = {
-    user,
-    setUser,
-    isLoading,
-    signIn, 
-    reactivateAccount,
-    logout,
-    signOut: logout, 
-    incrementFreeContactsUsed,
-    socket,
+    user, setUser, isLoading, signIn, reactivateAccount,
+    logout, signOut: logout, incrementFreeContactsUsed, socket,
   };
 
   if (isLoading) {
@@ -228,8 +174,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
-  }
+  if (context === undefined) throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   return context;
 };
