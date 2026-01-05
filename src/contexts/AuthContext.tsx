@@ -34,23 +34,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // 1. INTERCEPTOR REFORÇADO: Resolve o problema do Feed
-  // Garante que toda requisição ao servidor leve o token atualizado
+  // INTERCEPTOR: Garante que o token acompanhe todas as requisições (Resolve o erro do Feed)
   useEffect(() => {
     const interceptor = api.interceptors.request.use(async (config) => {
-      const token = await storage.getToken();
+      const token = await storage.getToken(); //
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
-    }, (error) => {
-      return Promise.reject(error);
-    });
+    }, (error) => Promise.reject(error));
 
     return () => api.interceptors.request.eject(interceptor);
   }, []);
 
-  // 2. Inicialização da Sessão
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
@@ -70,57 +66,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { isMounted = false; };
   }, []);
 
-  // 3. Gestão do Socket (WebSocket estável)
   useEffect(() => {
     if (!user) {
-      if (socket) {
-        socket.disconnect();
-        setSocket(null);
-      }
+      if (socket) { socket.disconnect(); setSocket(null); }
       return;
     }
-
     const connectSocket = async () => {
       const token = await storage.getToken();
       if (!token || socket) return;
-
       const newSocket = io(ENV.API_URL, {
         auth: { token },
         transports: ['websocket'],
         reconnection: true,
       });
-
       newSocket.on('connect', () => setSocket(newSocket));
-      newSocket.on('disconnect', () => setSocket(null));
+      setSocket(newSocket);
     };
-
     connectSocket();
     return () => { if (socket) socket.disconnect(); };
   }, [user]);
 
-  // 4. Funções de Autenticação
   const signIn = useCallback(async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
-    const { token, user: userData } = response.data;
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      
+      // Captura flexível (pode vir em .token ou .data.token)
+      const token = response.data?.token || response.data?.accessToken || response.data?.data?.token;
+      const userData = response.data?.user || response.data?.data?.user;
 
-    if (!token) throw new Error('Servidor não retornou um token válido.');
+      if (!token) {
+        throw new Error('Servidor não retornou um token válido.');
+      }
 
-    const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
-    await storage.setToken(tokenString); //
-    
-    setUserState(userData);
-    queryClient.clear();
+      // Converte para string para evitar erro do SecureStore
+      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+      
+      await storage.setToken(tokenString); //
+      setUserState(userData);
+      queryClient.clear();
+      
+    } catch (error) {
+      console.error("Erro no signIn:", error);
+      throw error;
+    }
   }, [queryClient]);
 
   const reactivateAccount = useCallback(async (credentials) => {
-    const response = await api.post('/auth/reactivate', credentials);
-    const { token, user: userData } = response.data;
+    try {
+      const response = await api.post('/auth/reactivate', credentials);
+      const token = response.data?.token || response.data?.data?.token;
+      const userData = response.data?.user || response.data?.data?.user;
 
-    const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
-    await storage.setToken(tokenString);
-    
-    setUserState(userData);
-    queryClient.clear();
+      if (token) {
+        const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+        await storage.setToken(tokenString);
+        setUserState(userData);
+        queryClient.clear();
+      }
+    } catch (error) {
+      throw error;
+    }
   }, [queryClient]);
 
   const logout = useCallback(async () => {
@@ -134,12 +139,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const incrementFreeContactsUsed = useCallback(() => {
     setUserState((curr) => {
       if (!curr?.subscription || curr.subscription.status !== 'FREE') return curr;
-      return {
-        ...curr,
-        subscription: {
-          ...curr.subscription,
-          freeContactsUsed: (curr.subscription.freeContactsUsed || 0) + 1
-        }
+      return { 
+        ...curr, 
+        subscription: { 
+          ...curr.subscription, 
+          freeContactsUsed: (curr.subscription.freeContactsUsed || 0) + 1 
+        } 
       };
     });
   }, []);
@@ -154,15 +159,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ 
-      user, 
-      setUser: setUserState, 
-      isLoading, 
-      signIn, 
-      reactivateAccount, 
-      logout, 
-      signOut: logout, 
-      incrementFreeContactsUsed, 
-      socket 
+      user, setUser: setUserState, isLoading, signIn, reactivateAccount, 
+      logout, signOut: logout, incrementFreeContactsUsed, socket 
     }}>
       {children}
     </AuthContext.Provider>
