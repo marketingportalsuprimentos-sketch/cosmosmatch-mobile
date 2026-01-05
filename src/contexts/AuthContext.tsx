@@ -1,12 +1,10 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  Dispatch,
-  SetStateAction,
-  ReactNode,
+import React, { 
+  createContext, 
+  useContext, 
+  useState, 
+  useEffect, 
+  useCallback, 
+  ReactNode 
 } from 'react';
 import { api } from '../services/api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,7 +16,7 @@ import { View, ActivityIndicator } from 'react-native';
 
 export interface AuthContextType {
   user: AuthUser | null;
-  setUser: Dispatch<SetStateAction<AuthUser | null>>;
+  setUser: React.Dispatch<React.SetStateAction<AuthUser | null>>;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   reactivateAccount: (credentials: { email: string; password: string }) => Promise<void>;
@@ -36,20 +34,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // 1. Inicialização e Validação
+  // 1. INTERCEPTOR REFORÇADO: Resolve o problema do Feed
+  // Garante que toda requisição ao servidor leve o token atualizado
+  useEffect(() => {
+    const interceptor = api.interceptors.request.use(async (config) => {
+      const token = await storage.getToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    }, (error) => {
+      return Promise.reject(error);
+    });
+
+    return () => api.interceptors.request.eject(interceptor);
+  }, []);
+
+  // 2. Inicialização da Sessão
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
       try {
-        const token = await storage.getToken(); //
+        const token = await storage.getToken();
         if (token) {
-          // Atualiza o header da API caso já exista token salvo
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           const { data } = await api.get('/auth/me');
           if (isMounted) setUserState(data);
         }
       } catch (error) {
-        await storage.removeToken(); //
+        console.log("Sessão expirada ou erro de conexão");
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -58,7 +70,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { isMounted = false; };
   }, []);
 
-  // 2. Gestão do Socket
+  // 3. Gestão do Socket (WebSocket estável)
   useEffect(() => {
     if (!user) {
       if (socket) {
@@ -69,8 +81,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const connectSocket = async () => {
-      const token = await storage.getToken(); //
-      if (!token) return;
+      const token = await storage.getToken();
+      if (!token || socket) return;
 
       const newSocket = io(ENV.API_URL, {
         auth: { token },
@@ -86,53 +98,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { if (socket) socket.disconnect(); };
   }, [user]);
 
-  // 3. Função signIn CORRIGIDA para o erro de Seguir
+  // 4. Funções de Autenticação
   const signIn = useCallback(async (email, password) => {
-    try {
-      const response = await api.post('/auth/login', { email, password });
-      const { token, user: userData } = response.data;
+    const response = await api.post('/auth/login', { email, password });
+    const { token, user: userData } = response.data;
 
-      if (!token) throw new Error('Token não recebido');
+    if (!token) throw new Error('Servidor não retornou um token válido.');
 
-      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
-      
-      // PASSO CRÍTICO: Salvar o token e ATUALIZAR os cabeçalhos da API imediatamente
-      await storage.setToken(tokenString); //
-      api.defaults.headers.common['Authorization'] = `Bearer ${tokenString}`;
-      
-      setUserState(userData);
-      
-      // Limpar cache para forçar o app a ler os dados frescos com o novo token
-      queryClient.clear();
-      
-    } catch (error: any) {
-      console.error("Erro no Login:", error);
-      throw error; 
-    }
+    const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+    await storage.setToken(tokenString); //
+    
+    setUserState(userData);
+    queryClient.clear();
   }, [queryClient]);
 
   const reactivateAccount = useCallback(async (credentials) => {
-    try {
-      const response = await api.post('/auth/reactivate', credentials);
-      const { token, user: userData } = response.data;
-      const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
-      
-      await storage.setToken(tokenString); //
-      api.defaults.headers.common['Authorization'] = `Bearer ${tokenString}`;
-      
-      setUserState(userData);
-      queryClient.clear();
-    } catch (error) {
-      throw error;
-    }
+    const response = await api.post('/auth/reactivate', credentials);
+    const { token, user: userData } = response.data;
+
+    const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+    await storage.setToken(tokenString);
+    
+    setUserState(userData);
+    queryClient.clear();
   }, [queryClient]);
 
   const logout = useCallback(async () => {
     if (socket) socket.disconnect();
-    await storage.removeToken(); //
-    delete api.defaults.headers.common['Authorization']; // Limpa o header
-    setSocket(null);
+    await storage.removeToken();
     setUserState(null);
+    setSocket(null);
     queryClient.clear();
   }, [socket, queryClient]);
 
@@ -143,8 +138,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         ...curr,
         subscription: {
           ...curr.subscription,
-          freeContactsUsed: (curr.subscription.freeContactsUsed || 0) + 1,
-        },
+          freeContactsUsed: (curr.subscription.freeContactsUsed || 0) + 1
+        }
       };
     });
   }, []);
@@ -159,8 +154,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ 
-      user, setUser: setUserState, isLoading, signIn, reactivateAccount, 
-      logout, signOut: logout, incrementFreeContactsUsed, socket 
+      user, 
+      setUser: setUserState, 
+      isLoading, 
+      signIn, 
+      reactivateAccount, 
+      logout, 
+      signOut: logout, 
+      incrementFreeContactsUsed, 
+      socket 
     }}>
       {children}
     </AuthContext.Provider>
