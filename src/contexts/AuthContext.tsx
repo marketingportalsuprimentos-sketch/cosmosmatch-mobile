@@ -36,18 +36,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // 1. Validação de Sessão ao Iniciar
+  // 1. Inicialização e Validação
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
       try {
-        const token = await storage.getToken();
+        const token = await storage.getToken(); //
         if (token) {
+          // Atualiza o header da API caso já exista token salvo
+          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           const { data } = await api.get('/auth/me');
           if (isMounted) setUserState(data);
         }
       } catch (error) {
-        await storage.removeToken();
+        await storage.removeToken(); //
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -56,7 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { isMounted = false; };
   }, []);
 
-  // 2. Gestão do Socket (Estabilidade para iOS/TestFlight)
+  // 2. Gestão do Socket
   useEffect(() => {
     if (!user) {
       if (socket) {
@@ -67,7 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const connectSocket = async () => {
-      const token = await storage.getToken();
+      const token = await storage.getToken(); //
       if (!token) return;
 
       const newSocket = io(ENV.API_URL, {
@@ -84,31 +86,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { if (socket) socket.disconnect(); };
   }, [user]);
 
-  // 3. Função de Login com DEBUG para o erro de Token
+  // 3. Função signIn CORRIGIDA para o erro de Seguir
   const signIn = useCallback(async (email, password) => {
     try {
       const response = await api.post('/auth/login', { email, password });
-      
-      // LOG DE DEBUG: Verifique no terminal o que aparece aqui
-      console.log("Resposta completa do servidor:", response.data);
+      const { token, user: userData } = response.data;
 
-      // Aceita 'token' ou 'accessToken' para evitar erros de nomenclatura do backend
-      const token = response.data?.token || response.data?.accessToken;
-      const userData = response.data?.user;
+      if (!token) throw new Error('Token não recebido');
 
-      if (!token) {
-        throw new Error('Servidor não retornou um token válido.');
-      }
-
-      // PROTEÇÃO: Garante que o token é string para o storage.setToken
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
       
+      // PASSO CRÍTICO: Salvar o token e ATUALIZAR os cabeçalhos da API imediatamente
       await storage.setToken(tokenString); //
+      api.defaults.headers.common['Authorization'] = `Bearer ${tokenString}`;
       
       setUserState(userData);
+      
+      // Limpar cache para forçar o app a ler os dados frescos com o novo token
       queryClient.clear();
+      
     } catch (error: any) {
-      console.error("Erro detalhado no login:", error);
+      console.error("Erro no Login:", error);
       throw error; 
     }
   }, [queryClient]);
@@ -119,7 +117,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { token, user: userData } = response.data;
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
       
-      await storage.setToken(tokenString);
+      await storage.setToken(tokenString); //
+      api.defaults.headers.common['Authorization'] = `Bearer ${tokenString}`;
+      
       setUserState(userData);
       queryClient.clear();
     } catch (error) {
@@ -129,7 +129,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = useCallback(async () => {
     if (socket) socket.disconnect();
-    await storage.removeToken();
+    await storage.removeToken(); //
+    delete api.defaults.headers.common['Authorization']; // Limpa o header
     setSocket(null);
     setUserState(null);
     queryClient.clear();
