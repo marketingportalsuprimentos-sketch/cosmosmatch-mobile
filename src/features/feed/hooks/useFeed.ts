@@ -9,7 +9,6 @@ import {
 } from '@tanstack/react-query';
 import { Alert } from 'react-native';
 import * as feedApi from '../services/feedApi';
-// Caminho ajustado conforme seu arquivo original
 import { followUser, unfollowUser } from '../../profile/services/profileApi'; 
 import { chatApi } from '../../chat/services/chatApi'; 
 import { FeedDeck } from '@/types/feed.types';
@@ -27,16 +26,10 @@ export const useGetFeed = () => {
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
-      // AJUSTE CRÍTICO: Suporta tanto Objeto quanto Array
       if (!lastPage) return undefined;
-      
       const isArray = Array.isArray(lastPage);
-      // Se for array vazio, acabou
       if (isArray && lastPage.length === 0) return undefined;
-      // Se for objeto único mas vazio (sem posts), acabou
       if (!isArray && (!lastPage.posts || lastPage.posts.length === 0)) return undefined;
-      
-      // Incrementa a paginação
       return allPages.length * 2; 
     },
     enabled: !!user?.id,
@@ -59,12 +52,9 @@ export const useCreatePost = () => {
   });
 };
 
-// --- FUNÇÃO AUXILIAR PARA ATUALIZAR DECK (HÍBRIDA) ---
-// Atualiza um deck (objeto de usuário+posts) com o novo like
+// --- FUNÇÃO AUXILIAR PARA ATUALIZAR DECK ---
 function updateDeckLike(deck: FeedDeck | any, postId: string, isLike: boolean) {
     if (!deck || !deck.posts) return deck;
-    
-    // Verifica se o post alvo está dentro deste deck
     const postExists = deck.posts.some((p: any) => p.id === postId);
     if (!postExists) return deck;
     
@@ -83,7 +73,7 @@ function updateDeckLike(deck: FeedDeck | any, postId: string, isLike: boolean) {
     };
 }
 
-// --- LOGICA DE LIKE (HÍBRIDA) ---
+// --- LOGICA DE LIKE ---
 export const useLikePost = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -98,11 +88,9 @@ export const useLikePost = () => {
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
         const newPages = old.pages.map((page: any) => {
-           // CENÁRIO A: É uma Lista (Array)
            if (Array.isArray(page)) {
                return page.map(deck => updateDeckLike(deck, postId, true));
            }
-           // CENÁRIO B: É um Objeto Único (Backend Atual)
            return updateDeckLike(page, postId, true);
         });
         return { ...old, pages: newPages };
@@ -154,7 +142,7 @@ export const useUnlikePost = () => {
   });
 };
 
-// --- SEGUIR PELO FEED (HÍBRIDO: ARRAY OU OBJETO) ---
+// --- SEGUIR PELO FEED (CORRIGIDO) ---
 export const useFollowAuthorInFeed = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -163,15 +151,12 @@ export const useFollowAuthorInFeed = () => {
     mutationFn: (authorId: string) => followUser(authorId), 
     onMutate: async (authorId) => {
       const feedKey = ['feed', user?.id];
-      
       await queryClient.cancelQueries({ queryKey: feedKey });
       const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
 
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
-        
         const newPages = old.pages.map((page: any) => {
-           // CENÁRIO A: Backend devolve Array (Web/Antigo)
            if (Array.isArray(page)) {
                return page.map(deck => {
                    if (deck.author.id === authorId) {
@@ -180,8 +165,6 @@ export const useFollowAuthorInFeed = () => {
                    return deck;
                });
            }
-           
-           // CENÁRIO B: Backend devolve Objeto (Mobile Atual)
            if (page?.author?.id === authorId) {
                return { ...page, author: { ...page.author, isFollowedByMe: true } };
            }
@@ -189,23 +172,25 @@ export const useFollowAuthorInFeed = () => {
         });
         return { ...old, pages: newPages };
       });
-
       return { previousFeed };
     },
     onError: (err, variables, context) => {
       if (context?.previousFeed) {
         queryClient.setQueryData(['feed', user?.id], context.previousFeed);
       }
-      // Opcional: silenciar o alerta se for erro de concorrência, mas manter para debug
       Alert.alert('Erro', 'Não foi possível seguir.');
     },
     onSettled: () => {
+      // Sincronização global
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       queryClient.invalidateQueries({ queryKey: ['following'] }); 
+      queryClient.invalidateQueries({ queryKey: ['discovery'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });
 };
 
+// --- DESSEGUIR PELO FEED (CORRIGIDO) ---
 export const useUnfollowAuthorInFeed = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -220,7 +205,6 @@ export const useUnfollowAuthorInFeed = () => {
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
         const newPages = old.pages.map((page: any) => {
-           // CENÁRIO A: Array
            if (Array.isArray(page)) {
                return page.map(deck => {
                    if (deck.author.id === authorId) {
@@ -229,7 +213,6 @@ export const useUnfollowAuthorInFeed = () => {
                    return deck;
                });
            }
-           // CENÁRIO B: Objeto
            if (page?.author?.id === authorId) {
                return { ...page, author: { ...page.author, isFollowedByMe: false } };
            }
@@ -237,7 +220,6 @@ export const useUnfollowAuthorInFeed = () => {
         });
         return { ...old, pages: newPages };
       });
-
       return { previousFeed };
     },
     onError: (err, variables, context) => {
@@ -247,16 +229,18 @@ export const useUnfollowAuthorInFeed = () => {
       Alert.alert('Erro', 'Não foi possível deixar de seguir.');
     },
     onSettled: () => {
+      // Sincronização global
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       queryClient.invalidateQueries({ queryKey: ['following'] });
+      queryClient.invalidateQueries({ queryKey: ['discovery'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });
 };
 
-// --- COMENTÁRIOS E DELETE (Mantidos iguais) ---
+// --- COMENTÁRIOS E DELETE ---
 export const useCommentOnPost = () => {
   const queryClient = useQueryClient();
-  
   return useMutation({
     mutationFn: async ({ postId, content, authorId }: { postId: string; content: string; authorId?: string }) => {
       const response = await feedApi.commentOnPost(postId, { content });

@@ -34,18 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // INTERCEPTOR: Garante que o token acompanhe todas as requisições (Resolve o erro do Feed)
-  useEffect(() => {
-    const interceptor = api.interceptors.request.use(async (config) => {
-      const token = await storage.getToken(); //
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    }, (error) => Promise.reject(error));
-
-    return () => api.interceptors.request.eject(interceptor);
-  }, []);
+  // NOTA: O interceptor de API foi movido para src/services/api.ts para evitar conflitos de ciclo de vida.
 
   useEffect(() => {
     let isMounted = true;
@@ -57,7 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (isMounted) setUserState(data);
         }
       } catch (error) {
-        console.log("Sessão expirada ou erro de conexão");
+        console.log("Sessão expirada ou erro de conexão no initAuth");
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -71,40 +60,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (socket) { socket.disconnect(); setSocket(null); }
       return;
     }
+    let activeSocket: Socket | null = null;
     const connectSocket = async () => {
       const token = await storage.getToken();
-      if (!token || socket) return;
-      const newSocket = io(ENV.API_URL, {
+      if (!token) return;
+      activeSocket = io(ENV.API_URL, {
         auth: { token },
         transports: ['websocket'],
         reconnection: true,
       });
-      newSocket.on('connect', () => setSocket(newSocket));
-      setSocket(newSocket);
+      activeSocket.on('connect', () => setSocket(activeSocket));
     };
     connectSocket();
-    return () => { if (socket) socket.disconnect(); };
+    return () => { if (activeSocket) activeSocket.disconnect(); };
   }, [user]);
 
   const signIn = useCallback(async (email, password) => {
     try {
       const response = await api.post('/auth/login', { email, password });
-      
-      // Captura flexível (pode vir em .token ou .data.token)
       const token = response.data?.token || response.data?.accessToken || response.data?.data?.token;
       const userData = response.data?.user || response.data?.data?.user;
 
-      if (!token) {
-        throw new Error('Servidor não retornou um token válido.');
-      }
+      if (!token) throw new Error('Token inválido.');
 
-      // Converte para string para evitar erro do SecureStore
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
-      
-      await storage.setToken(tokenString); //
+      await storage.setToken(tokenString);
       setUserState(userData);
       queryClient.clear();
-      
     } catch (error) {
       console.error("Erro no signIn:", error);
       throw error;
@@ -116,16 +98,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await api.post('/auth/reactivate', credentials);
       const token = response.data?.token || response.data?.data?.token;
       const userData = response.data?.user || response.data?.data?.user;
-
       if (token) {
-        const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
-        await storage.setToken(tokenString);
+        await storage.setToken(token);
         setUserState(userData);
         queryClient.clear();
       }
-    } catch (error) {
-      throw error;
-    }
+    } catch (error) { throw error; }
   }, [queryClient]);
 
   const logout = useCallback(async () => {

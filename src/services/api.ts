@@ -7,23 +7,29 @@ import { navigate } from '../navigation/navigationRef';
 export const api = axios.create({
   baseURL: ENV.API_URL,
   withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  }
 });
 
-// Interceptor de REQUEST
+// INTERCEPTOR DE REQUEST - Único e centralizado
 api.interceptors.request.use(
   async (config) => {
-    const token = await storage.getToken();
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const token = await storage.getToken();
+      if (token) {
+        // Garantindo que o Bearer seja injetado corretamente
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error("Erro ao recuperar token no interceptor:", error);
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error)
 );
 
-// Interceptor de RESPONSE
+// INTERCEPTOR DE RESPONSE
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -31,7 +37,7 @@ api.interceptors.response.use(
     const errorData = error.response?.data as { message?: string };
     const message = errorData?.message || 'Ocorreu um erro inesperado.';
 
-    // 1. Token Expirado (401)
+    // 1. Sessão Expirada
     if (status === 401) {
       await storage.removeToken();
       navigate('Login');
@@ -39,26 +45,13 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // 2. Paywall / Premium (402 ou 403 com mensagem de limite)
-    // Se o erro for 402 ou um 403 que mencione "limite", enviamos para a tela Premium
+    // 2. Paywall / Limites Premium
     if (status === 402 || (status === 403 && message.toLowerCase().includes('limite'))) {
       toast.error(message);
       navigate('Premium');
       return Promise.reject(error);
     }
 
-    // 3. Bloqueio por Verificação de Email
-    if (status === 403 && message.toLowerCase().includes('verifique o seu email')) {
-      toast.info('Verifique seu email para continuar.');
-      // navigate('VerifyEmail'); // Ative se tiver esta tela
-      return Promise.reject(error);
-    }
-
-    // Erros genéricos de Servidor
-    if (status && status >= 500) {
-      toast.error('Erro no servidor. Tente novamente mais tarde.');
-    }
-
     return Promise.reject(error);
-  },
+  }
 );
