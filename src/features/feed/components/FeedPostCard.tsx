@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { 
-  View, Text, Image, StyleSheet, Dimensions, TouchableOpacity, 
-  Platform 
+  View, Text, Image, StyleSheet, Dimensions, TouchableOpacity 
 } from 'react-native';
 import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,7 +17,6 @@ interface FeedPostCardProps {
   isFollowedByMe: boolean; 
   onShare?: () => void;
   onOptions?: () => void;
-  onDelete?: () => void;
   onOpenComments?: () => void;
   onFollow?: () => void; 
 }
@@ -57,7 +55,11 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({
         <View style={styles.followButtonContainer}>
           <TouchableOpacity activeOpacity={0.8}>
             <Image 
-              source={author.profile?.imageUrl ? { uri: author.profile.imageUrl } : require('@/assets/default-avatar.png')} 
+              source={
+                author.profile?.imageUrl 
+                  ? { uri: author.profile.imageUrl } 
+                  : require('@/assets/icon.png')
+              } 
               style={styles.followAvatar} 
             />
           </TouchableOpacity>
