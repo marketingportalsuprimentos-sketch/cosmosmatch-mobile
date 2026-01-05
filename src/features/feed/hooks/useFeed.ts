@@ -1,5 +1,3 @@
-// src/features/feed/hooks/useFeed.ts
-
 import {
   useInfiniteQuery,
   useMutation,
@@ -21,8 +19,7 @@ export const useGetFeed = () => {
   return useInfiniteQuery({
     queryKey: ['feed', user?.id],
     queryFn: async ({ pageParam = 0 }) => {
-      const data = await feedApi.getFeed({ skip: pageParam, take: 2 });
-      return data;
+      return await feedApi.getFeed({ skip: pageParam, take: 2 });
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
@@ -52,7 +49,7 @@ export const useCreatePost = () => {
   });
 };
 
-// --- FUNÇÃO AUXILIAR PARA ATUALIZAR DECK ---
+// --- Funções Auxiliares ---
 function updateDeckLike(deck: FeedDeck | any, postId: string, isLike: boolean) {
     if (!deck || !deck.posts) return deck;
     const postExists = deck.posts.some((p: any) => p.id === postId);
@@ -73,24 +70,20 @@ function updateDeckLike(deck: FeedDeck | any, postId: string, isLike: boolean) {
     };
 }
 
-// --- LOGICA DE LIKE ---
+// --- Mutações de Like ---
 export const useLikePost = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-
   return useMutation({
     mutationFn: feedApi.likePost,
     onMutate: async (postId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
       const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
-
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
         const newPages = old.pages.map((page: any) => {
-           if (Array.isArray(page)) {
-               return page.map(deck => updateDeckLike(deck, postId, true));
-           }
+           if (Array.isArray(page)) return page.map(deck => updateDeckLike(deck, postId, true));
            return updateDeckLike(page, postId, true);
         });
         return { ...old, pages: newPages };
@@ -98,33 +91,25 @@ export const useLikePost = () => {
       return { previousFeed };
     },
     onError: (err, newPost, context) => {
-      if (context?.previousFeed) {
-        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
-      }
+      if (context?.previousFeed) queryClient.setQueryData(['feed', user?.id], context.previousFeed);
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
-    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
 };
 
 export const useUnlikePost = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-
   return useMutation({
     mutationFn: feedApi.unlikePost,
     onMutate: async (postId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
       const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
-
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
         const newPages = old.pages.map((page: any) => {
-            if (Array.isArray(page)) {
-               return page.map(deck => updateDeckLike(deck, postId, false));
-            }
+            if (Array.isArray(page)) return page.map(deck => updateDeckLike(deck, postId, false));
             return updateDeckLike(page, postId, false);
         });
         return { ...old, pages: newPages };
@@ -132,42 +117,27 @@ export const useUnlikePost = () => {
       return { previousFeed };
     },
     onError: (err, newPost, context) => {
-      if (context?.previousFeed) {
-        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
-      }
+      if (context?.previousFeed) queryClient.setQueryData(['feed', user?.id], context.previousFeed);
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
-    }
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
 };
 
-// --- SEGUIR PELO FEED (CORRIGIDO) ---
+// --- Mutações de Seguir/Desseguir (CORRIGIDAS) ---
 export const useFollowAuthorInFeed = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-
   return useMutation({
     mutationFn: (authorId: string) => followUser(authorId), 
     onMutate: async (authorId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
       const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
-
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
         const newPages = old.pages.map((page: any) => {
-           if (Array.isArray(page)) {
-               return page.map(deck => {
-                   if (deck.author.id === authorId) {
-                       return { ...deck, author: { ...deck.author, isFollowedByMe: true } };
-                   }
-                   return deck;
-               });
-           }
-           if (page?.author?.id === authorId) {
-               return { ...page, author: { ...page.author, isFollowedByMe: true } };
-           }
+           if (Array.isArray(page)) return page.map(deck => deck.author.id === authorId ? { ...deck, author: { ...deck.author, isFollowedByMe: true } } : deck);
+           if (page?.author?.id === authorId) return { ...page, author: { ...page.author, isFollowedByMe: true } };
            return page;
         });
         return { ...old, pages: newPages };
@@ -175,47 +145,31 @@ export const useFollowAuthorInFeed = () => {
       return { previousFeed };
     },
     onError: (err, variables, context) => {
-      if (context?.previousFeed) {
-        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
-      }
+      if (context?.previousFeed) queryClient.setQueryData(['feed', user?.id], context.previousFeed);
       Alert.alert('Erro', 'Não foi possível seguir.');
     },
     onSettled: () => {
-      // Sincronização global
       queryClient.invalidateQueries({ queryKey: ['feed'] });
-      queryClient.invalidateQueries({ queryKey: ['following'] }); 
       queryClient.invalidateQueries({ queryKey: ['discovery'] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
     },
   });
 };
 
-// --- DESSEGUIR PELO FEED (CORRIGIDO) ---
 export const useUnfollowAuthorInFeed = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-
   return useMutation({
     mutationFn: (authorId: string) => unfollowUser(authorId),
     onMutate: async (authorId) => {
       const feedKey = ['feed', user?.id];
       await queryClient.cancelQueries({ queryKey: feedKey });
       const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
-
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (old) => {
         if (!old || !old.pages) return old;
         const newPages = old.pages.map((page: any) => {
-           if (Array.isArray(page)) {
-               return page.map(deck => {
-                   if (deck.author.id === authorId) {
-                       return { ...deck, author: { ...deck.author, isFollowedByMe: false } };
-                   }
-                   return deck;
-               });
-           }
-           if (page?.author?.id === authorId) {
-               return { ...page, author: { ...page.author, isFollowedByMe: false } };
-           }
+           if (Array.isArray(page)) return page.map(deck => deck.author.id === authorId ? { ...deck, author: { ...deck.author, isFollowedByMe: false } } : deck);
+           if (page?.author?.id === authorId) return { ...page, author: { ...page.author, isFollowedByMe: false } };
            return page;
         });
         return { ...old, pages: newPages };
@@ -223,22 +177,18 @@ export const useUnfollowAuthorInFeed = () => {
       return { previousFeed };
     },
     onError: (err, variables, context) => {
-      if (context?.previousFeed) {
-        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
-      }
+      if (context?.previousFeed) queryClient.setQueryData(['feed', user?.id], context.previousFeed);
       Alert.alert('Erro', 'Não foi possível deixar de seguir.');
     },
     onSettled: () => {
-      // Sincronização global
       queryClient.invalidateQueries({ queryKey: ['feed'] });
-      queryClient.invalidateQueries({ queryKey: ['following'] });
       queryClient.invalidateQueries({ queryKey: ['discovery'] });
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['following'] });
     },
   });
 };
 
-// --- COMENTÁRIOS E DELETE ---
+// --- Comentários e Outros ---
 export const useCommentOnPost = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -246,21 +196,14 @@ export const useCommentOnPost = () => {
       const response = await feedApi.commentOnPost(postId, { content });
       if (authorId) {
           try {
-             await chatApi.createOrGetConversation({
-                 targetUserId: authorId,
-                 content: `Comentou no seu post: "${content}"`
-             });
-          } catch (error: any) {
-             if (error?.response?.status === 402) throw error; 
-             console.log("Chat error:", error);
-          }
+             await chatApi.createOrGetConversation({ targetUserId: authorId, content: `Comentou no seu post: "${content}"` });
+          } catch (error) { console.log("Chat error:", error); }
       }
       return response;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['postComments', variables.postId] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
-      if (variables.authorId) queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   });
 };
@@ -270,24 +213,6 @@ export const useGetPostComments = (postId: string | null) => {
     queryKey: ['postComments', postId],
     queryFn: () => feedApi.getPostComments(postId!),
     enabled: !!postId,
-  });
-};
-
-export const useDeletePostComment = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (commentId: string) => {
-      await api.delete(`/post/comment/${commentId}`);
-    },
-    onSuccess: () => {
-      Alert.alert('Sucesso', 'Comentário apagado.');
-      queryClient.invalidateQueries({ queryKey: ['postComments'] });
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
-    },
-    onError: (error: any) => {
-      const msg = error.response?.data?.message || 'Não foi possível apagar.';
-      Alert.alert('Erro', msg);
-    }
   });
 };
 
