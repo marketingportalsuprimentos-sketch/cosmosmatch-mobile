@@ -43,23 +43,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let isMounted = true;
     const validateToken = async () => {
       try {
-        setIsLoading(true);
         const token = await storage.getToken();
         
-        let fetchedUser: AuthUser | null = null;
         if (token) {
           try {
-            const response = await api.get<AuthUser>('/auth/me'); // Rota padrão corrigida para /me
-            fetchedUser = response.data;
+            const response = await api.get<AuthUser>('/auth/me'); 
+            if (isMounted) setUserState(response.data);
           } catch (error: any) {
             if ([401, 403, 404].includes(error.response?.status)) {
                 await storage.removeToken();
-                fetchedUser = null;
+                if (isMounted) setUserState(null);
             }
           }
         }
-
-        if (isMounted) setUserState(fetchedUser);
       } catch (err) {
         console.error('Erro na validação:', err);
       } finally {
@@ -70,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { isMounted = false; };
   }, []);
 
-  // 2. Gestão do Socket.IO com Reconexão Automática
+  // 2. Gestão do Socket com Reconexão
   useEffect(() => {
     if (!user) {
       if (socket) {
@@ -84,12 +80,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const token = await storage.getToken();
       if (!token || socket) return;
 
-      const newSocket = io(ENV.SOCKET_URL, {
+      const newSocket = io(ENV.SOCKET_URL || ENV.API_URL, {
         auth: { token },
         transports: ['websocket'],
-        reconnection: true,           // Ativa reconexão
-        reconnectionAttempts: 10,     // Tenta 10 vezes
-        reconnectionDelay: 3000,      // 3 segundos entre tentativas
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 3000,
       });
 
       newSocket.on('connect', () => console.log('Socket Conectado!'));
@@ -103,24 +99,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       if (socket) socket.disconnect();
     };
-  }, [user, socket]);
+  }, [user]);
 
+  // 3. Funções de Autenticação (Nomes de funções do storage corrigidos)
   const signIn = useCallback(async (email, password) => {
     queryClient.clear();
     const response = await api.post('/auth/login', { email, password });
-    const { token, user } = response.data; // Ajustado de accessToken para token conforme padrão do seu back
+    const { token, user: userData } = response.data; // userData para evitar conflito de nome
 
-    await storage.saveToken(token);
-    setUserState(user);
+    await storage.setToken(token); // CORRIGIDO: de saveToken para setToken
+    setUserState(userData);
   }, [queryClient]);
 
   const reactivateAccount = useCallback(async (credentials: { email: string; password: string }) => {
     queryClient.clear();
     const response = await api.post('/auth/reactivate', credentials);
-    const { token, user } = response.data;
+    const { token, user: userData } = response.data;
 
-    await storage.saveToken(token);
-    setUserState(user);
+    await storage.setToken(token); // CORRIGIDO: de saveToken para setToken
+    setUserState(userData);
   }, [queryClient]);
 
   const logout = useCallback(async () => {
