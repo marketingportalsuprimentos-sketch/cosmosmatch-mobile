@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  View, Text, Image, StyleSheet, Dimensions, TouchableOpacity 
+  View, Text, Image, StyleSheet, Dimensions, TouchableOpacity, Platform 
 } from 'react-native';
 import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,6 +34,12 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({
   const { user } = useAuth();
   const isOwner = user?.id === author.id;
 
+  // Proteção para evitar o crash: Se não houver imagem, usamos uma cor de fundo sólida
+  // em vez de tentar um require que falha na build.
+  const avatarSource = author.profile?.imageUrl 
+    ? { uri: author.profile.imageUrl } 
+    : null;
+
   return (
     <View style={styles.container}>
       {post.mediaType === MediaType.VIDEO ? (
@@ -53,14 +59,14 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({
 
       <View style={styles.sideActions}>
         <View style={styles.followButtonContainer}>
-          <TouchableOpacity activeOpacity={0.8}>
-            {author.profile?.imageUrl ? (
-              <Image source={{ uri: author.profile.imageUrl }} style={styles.followAvatar} />
-            ) : (
-              <View style={[styles.followAvatar, { backgroundColor: '#374151', justifyContent: 'center', alignItems: 'center' }]}>
-                <Ionicons name="person" size={24} color="#9CA3AF" />
-              </View>
-            )}
+          <TouchableOpacity activeOpacity={0.8} onPress={onFollow}>
+            <View style={[styles.followAvatar, { backgroundColor: '#374151', overflow: 'hidden' }]}>
+              {avatarSource ? (
+                <Image source={avatarSource} style={StyleSheet.absoluteFill} />
+              ) : (
+                <Ionicons name="person" size={24} color="#9CA3AF" style={{ marginTop: 10, marginLeft: 10 }} />
+              )}
+            </View>
           </TouchableOpacity>
           
           {!isOwner && (
@@ -82,7 +88,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({
 
         <TouchableOpacity style={styles.actionButton} onPress={onOpenComments}>
           <Ionicons name="chatbubble-outline" size={32} color="white" />
-          <Text style={styles.actionText}>{post.commentsCount}</Text>
+          <Text style={styles.actionText}>{post.commentsCount || 0}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={onShare}>
@@ -106,7 +112,7 @@ const styles = StyleSheet.create({
   container: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, backgroundColor: 'black' },
   media: { ...StyleSheet.absoluteFillObject },
   gradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 300 },
-  sideActions: { position: 'absolute', right: 10, bottom: 120, alignItems: 'center', gap: 20 },
+  sideActions: { position: 'absolute', right: 10, bottom: 120, alignItems: 'center', gap: 20, zIndex: 100 },
   followButtonContainer: { marginBottom: 15, alignItems: 'center', position: 'relative' },
   followAvatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: 'white' },
   followBadge: { position: 'absolute', bottom: -5, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'black' },
