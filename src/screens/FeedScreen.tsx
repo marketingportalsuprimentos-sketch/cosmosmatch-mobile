@@ -1,7 +1,14 @@
-// src/screens/FeedScreen.tsx (VERSÃO DE DEBUG)
-
-import React, { useRef, useState, useEffect } from 'react';
-import { View, FlatList, ActivityIndicator, StatusBar, ViewToken, Dimensions, Text, Button } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { 
+  View, 
+  FlatList, 
+  ActivityIndicator, 
+  StatusBar, 
+  ViewToken, 
+  Dimensions, 
+  Text, 
+  Button 
+} from 'react-native';
 import { useGetFeed } from '@/features/feed/hooks/useFeed';
 import { FeedUserDeck } from '@/features/feed/components/FeedUserDeck';
 import { FeedDeck } from '@/types/feed.types';
@@ -12,7 +19,6 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 export const FeedScreen = () => {
   const insets = useSafeAreaInsets();
   
-  // Hooks de dados
   const { 
     data, 
     fetchNextPage, 
@@ -25,79 +31,62 @@ export const FeedScreen = () => {
   
   const [activeDeckIndex, setActiveDeckIndex] = useState(0);
 
-  // --- LOGS DE DEBUG ---
-  useEffect(() => {
-    console.log("--- DEBUG FEED ---");
-    console.log("Is Loading:", isLoading);
-    console.log("Is Error:", isError);
-    if (error) console.log("Error Detail:", error);
-    
-    if (data) {
-      console.log("Data Pages:", data.pages.length);
-      data.pages.forEach((page, index) => {
-        console.log(`Page ${index}:`, page ? `Author: ${page.author?.name}, Posts: ${page.posts?.length}` : "NULL/UNDEFINED");
-      });
-    } else {
-      console.log("Data is undefined/null");
-    }
-    console.log("------------------");
-  }, [data, isLoading, isError, error]);
-  // --------------------
-
-  // Processamento dos dados
+  // --- SINCRONIZAÇÃO DE DADOS EM TEMPO REAL ---
+  // Extraímos os decks diretamente do data do React Query.
+  // Isso garante que se o cache mudar (Follow/Unfollow), a UI atualiza instantaneamente sem travar.
   const decks = data?.pages.filter((page): page is FeedDeck => {
     return !!page && !!page.author && Array.isArray(page.posts) && page.posts.length > 0;
   }) || [];
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index !== null) {
       setActiveDeckIndex(viewableItems[0].index);
     }
-  }).current;
+  }, []);
 
-  // ESTADO 1: CARREGANDO
-  if (isLoading) {
+  // 1. ESTADO DE CARREGAMENTO
+  if (isLoading && decks.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#a855f7" />
-        <Text style={{ color: 'white', marginTop: 10 }}>Carregando Feed...</Text>
+        <ActivityIndicator size="large" color="#8B5CF6" />
+        <Text style={{ color: 'white', marginTop: 10 }}>Carregando o teu cosmos...</Text>
       </View>
     );
   }
 
-  // ESTADO 2: ERRO
+  // 2. ESTADO DE ERRO
   if (isError) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#1a0000', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ color: 'red', fontSize: 18, fontWeight: 'bold' }}>Ocorreu um Erro</Text>
-        <Text style={{ color: 'white', marginTop: 10, textAlign: 'center' }}>{JSON.stringify(error)}</Text>
-        <Button title="Tentar Novamente" onPress={() => refetch()} />
+      <View style={{ flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ color: '#ef4444', fontSize: 18, fontWeight: 'bold' }}>Erro de Conexão</Text>
+        <Text style={{ color: 'white', marginTop: 10, textAlign: 'center', marginBottom: 20 }}>
+          {error instanceof Error ? error.message : 'Não foi possível carregar o feed.'}
+        </Text>
+        <Button title="Tentar Novamente" color="#8B5CF6" onPress={() => refetch()} />
       </View>
     );
   }
 
-  // ESTADO 3: LISTA VAZIA
+  // 3. ESTADO VAZIO
   if (decks.length === 0) {
-     return (
-        <View style={{ flex: 1, backgroundColor: '#00001a', justifyContent: 'center', alignItems: 'center' }}>
-           <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Feed Vazio</Text>
-           <Text style={{ color: '#ccc', marginTop: 5 }}>Nenhum post retornado da API.</Text>
-           <Text style={{ color: '#666', marginTop: 20, fontSize: 12 }}>Verifique se você segue alguém ou se há posts públicos.</Text>
-           <Button title="Recarregar" onPress={() => refetch()} />
+    return (
+      <View style={{ flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ color: 'white', fontSize: 20, fontWeight: 'bold' }}>Feed Vazio</Text>
+        <Text style={{ color: '#9ca3af', marginTop: 10, textAlign: 'center' }}>
+          Segue novas pessoas na aba Descoberta para veres os seus posts aqui.
+        </Text>
+        <View style={{ marginTop: 20 }}>
+          <Button title="Recarregar" color="#8B5CF6" onPress={() => refetch()} />
         </View>
-     );
+      </View>
+    );
   }
 
-  // ESTADO 4: SUCESSO (RENDERIZAÇÃO)
+  // 4. RENDERIZAÇÃO DO FEED
   return (
     <View style={{ flex: 1, backgroundColor: 'black' }}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      {/* Texto de Debug temporário no topo */}
-      <View style={{ position: 'absolute', top: insets.top + 10, left: 10, zIndex: 100, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-        <Text style={{ color: '#0f0', fontSize: 10 }}>DEBUG: {decks.length} Decks carregados</Text>
-      </View>
-
       <FlatList
         data={decks}
         keyExtractor={(item, index) => `${item.author.id}-${index}`}
@@ -116,19 +105,22 @@ export const FeedScreen = () => {
         }}
         onEndReachedThreshold={0.5}
         onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 70 }}
+        viewabilityConfig={{ 
+          itemVisiblePercentThreshold: 70,
+          minimumViewTime: 300 
+        }}
         
-        // Configurações de Layout
+        // Configurações de Snap (Estilo TikTok)
         snapToInterval={SCREEN_HEIGHT}
         snapToAlignment="start"
         decelerationRate="fast"
         disableIntervalMomentum
         
-        // Performance
-        windowSize={3}
-        initialNumToRender={1}
-        maxToRenderPerBatch={1}
+        // Otimização de Performance
         removeClippedSubviews={true}
+        initialNumToRender={1}
+        maxToRenderPerBatch={2}
+        windowSize={3}
       />
     </View>
   );
