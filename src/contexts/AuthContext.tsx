@@ -84,27 +84,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => { if (socket) socket.disconnect(); };
   }, [user]);
 
-  // 3. Função de Login corrigida para evitar o erro do SecureStore
+  // 3. Função de Login com DEBUG para o erro de Token
   const signIn = useCallback(async (email, password) => {
     try {
       const response = await api.post('/auth/login', { email, password });
       
-      if (!response.data || !response.data.token) {
+      // LOG DE DEBUG: Verifique no terminal o que aparece aqui
+      console.log("Resposta completa do servidor:", response.data);
+
+      // Aceita 'token' ou 'accessToken' para evitar erros de nomenclatura do backend
+      const token = response.data?.token || response.data?.accessToken;
+      const userData = response.data?.user;
+
+      if (!token) {
         throw new Error('Servidor não retornou um token válido.');
       }
-
-      const { token, user: userData } = response.data;
 
       // PROTEÇÃO: Garante que o token é string para o storage.setToken
       const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
       
-      await storage.setToken(tokenString); // Usa o teu método do storage.ts
+      await storage.setToken(tokenString); //
       
       setUserState(userData);
       queryClient.clear();
-    } catch (error) {
-      console.error("Erro no AuthContext (signIn):", error);
-      throw error; // Repassa o erro para a LoginScreen mostrar o Alerta
+    } catch (error: any) {
+      console.error("Erro detalhado no login:", error);
+      throw error; 
     }
   }, [queryClient]);
 
