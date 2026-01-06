@@ -1,202 +1,264 @@
-// src/features/feed/components/FeedUserDeck.tsx
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
-  View, FlatList, Dimensions, ViewToken, StyleSheet, Animated, Platform, TouchableOpacity, Image, Text 
+  View, Text, Image, StyleSheet, Dimensions, FlatList, Animated, Easing, TouchableOpacity, Platform, Alert, ActivityIndicator 
 } from 'react-native';
+import { BlurView } from 'expo-blur'; 
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useNavigation } from '@react-navigation/native';
-import { FeedDeck, MediaType } from '@/types/feed.types';
-import { FeedPostCard } from './FeedPostCard';
-import { useAuth } from '@/contexts/AuthContext';
 
-// --- IMPORTAMOS OS NOVOS HOOKS DE "FIXAÇÃO" AQUI ---
-import { useFollowAuthorInFeed, useUnfollowAuthorInFeed } from '../hooks/useFeed';
+// Hooks e Contextos
+import { useAuth } from '../../../contexts/AuthContext'; 
+import { useLikePost, useUnlikePost, useDeletePost } from '../hooks/useFeed';
+import { useGetFollowing, useFollowUser } from '../../profile/hooks/useProfile'; 
+import { FeedCommentSheet } from './FeedCommentSheet';
+import { ReportPostModal } from './ReportPostModal';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-interface FeedUserDeckProps {
-  deck: FeedDeck;
-  isActiveDeck: boolean;
-  onDeckFinished: () => void;
-  onSharePost: (postId: string, url: string, author: string) => void;
-  onOptionsPost: (postId: string, isOwner: boolean) => void;
-  onOpenComments: (postId: string, authorId: string) => void;
-  onDeletePost: (postId: string) => void;
-  // O onFollowAuthor antigo vindo do pai será ignorado em favor dos hooks locais mais inteligentes
-  onFollowAuthor?: (authorId: string) => void; 
-}
-
-export const FeedUserDeck: React.FC<FeedUserDeckProps> = ({ 
-  deck, 
-  isActiveDeck,
-  onDeckFinished,
-  onSharePost,
-  onOptionsPost,
-  onOpenComments,
-  onDeletePost,
-}) => {
+export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: any) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [isReportingOpen, setIsReportingOpen] = useState(false);
+  
+  const { user: loggedInUser } = useAuth();
   const navigation = useNavigation<any>();
-  const { user } = useAuth();
-
-  // --- NOVOS HOOKS QUE "FIXAM" O BOTÃO ---
-  const { mutate: followAuthor } = useFollowAuthorInFeed();
-  const { mutate: unfollowAuthor } = useUnfollowAuthorInFeed();
-
-  if (!deck || !deck.posts || !Array.isArray(deck.posts) || deck.posts.length === 0) {
-    return null;
-  }
-
-  const [activePostIndex, setActivePostIndex] = useState(0);
-  const horizontalListRef = useRef<FlatList>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef<FlatList>(null);
 
-  const isOwner = user?.id === deck.author.id;
+  const { mutate: likePost } = useLikePost();
+  const { mutate: unlikePost } = useUnlikePost();
+  const { mutate: deletePost } = useDeletePost();
+  const { mutate: followUser } = useFollowUser();
+  const { data: followingList } = useGetFollowing(loggedInUser?.id);
 
-  // Lê o status. Se o Backend não mandou nada, usamos false. 
-  // Mas como o hook atualiza o cache localmente, isso vai virar TRUE assim que você clicar.
-  const isFollowed = deck.author.isFollowedByMe ?? (deck.author as any).isFollowing ?? false;
+  // Extração segura do post para evitar tela preta
+  const currentPost = useMemo(() => {
+    if (!userPosts || userPosts.length === 0) return null;
+    return userPosts[currentIndex] || userPosts[0];
+  }, [userPosts, currentIndex]);
 
-  // --- FUNÇÃO INTELIGENTE DE SEGUIR ---
-  const handleToggleFollow = () => {
-    const authorId = deck.author.id;
-    if (isFollowed) {
-        // Se já sigo, paro de seguir (muda visualmente na hora)
-        unfollowAuthor(authorId);
-    } else {
-        // Se não sigo, começo a seguir (muda visualmente na hora)
-        followAuthor(authorId);
-    }
-  };
+  const author = currentPost?.author;
+  const isOwner = loggedInUser?.id === author?.id;
 
-  const handleProfilePress = () => {
-    if (isOwner) {
-      navigation.navigate('MainTabs', { screen: 'Profile' });
-    } else {
-      navigation.navigate('PublicProfile', { userId: deck.author.id });
-    }
-  };
+  const isAlreadyFollowing = useMemo(() => {
+    if (!followingList || !author?.id) return false;
+    return followingList.some((u: any) => u.id === author.id);
+  }, [followingList, author?.id]);
 
+  // LÓGICA DE MODERAÇÃO SINCRONIZADA COM O PRISMA
+  // O post permanece na lista, mas o Blur é ativado se:
+  // 1. isSensitive for true (Marcado pelo Admin ou Sistema)
+  // 2. reportsCount for 3 ou mais
+  const shouldBlur = useMemo(() => {
+    if (!currentPost) return false;
+    const reportsCount = currentPost.reportsCount || 0;
+    return reportsCount >= 3 || currentPost.isSensitive === true;
+  }, [currentPost]);
+
+  // Sincronização de índice
   useEffect(() => {
-    if (isActiveDeck) {
-      const currentPost = deck.posts[activePostIndex];
-      const isHidden = currentPost.isHidden;
+    if (userPosts.length > 0 && currentIndex >= userPosts.length) {
+      setCurrentIndex(userPosts.length - 1);
+    } else if (userPosts.length === 0 && isActiveDeck) {
+      if (onDeckComplete) onDeckComplete();
+    }
+  }, [userPosts.length, currentIndex, isActiveDeck]);
 
-      if (isHidden) {
-        progressAnim.setValue(0);
-        return;
+  // Temporizador de Progresso (Stories Style)
+  useEffect(() => {
+    if (isActiveDeck && currentPost && !isCommentsOpen && !isReportingOpen && !shouldBlur) {
+      let duration = 5000;
+      if (currentPost.mediaType === 'VIDEO' && currentPost.videoDuration) {
+        duration = currentPost.videoDuration * 1000;
       }
 
       progressAnim.setValue(0);
-      const duration = currentPost.mediaType === MediaType.VIDEO && currentPost.videoDuration 
-        ? currentPost.videoDuration * 1000 
-        : 5000;
-
-      Animated.timing(progressAnim, {
+      const animation = Animated.timing(progressAnim, {
         toValue: 1,
         duration: duration,
+        easing: Easing.linear,
         useNativeDriver: false,
-      }).start(({ finished }) => {
+      });
+
+      animation.start(({ finished }) => {
         if (finished) {
-          handleNextPost();
+          if (currentIndex < userPosts.length - 1) {
+            const next = currentIndex + 1;
+            flatListRef.current?.scrollToIndex({ index: next, animated: true });
+            setCurrentIndex(next);
+          } else {
+            if (onDeckComplete) onDeckComplete();
+          }
         }
       });
-    } else {
-      progressAnim.stopAnimation();
-      progressAnim.setValue(0);
+      return () => animation.stop();
     }
-  }, [isActiveDeck, activePostIndex, deck.posts]);
+  }, [currentIndex, isActiveDeck, currentPost, isCommentsOpen, isReportingOpen, shouldBlur]);
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-      setActivePostIndex(viewableItems[0].index);
-    }
-  }).current;
-
-  const handleNextPost = () => {
-    if (activePostIndex < deck.posts.length - 1) {
-       horizontalListRef.current?.scrollToIndex({
-         index: activePostIndex + 1,
-         animated: true
-       });
-    } else {
-       onDeckFinished();
-    }
-  };
+  if (!currentPost) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator color="#8B5CF6" size="large" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      
-      {/* 1. BARRA DE PROGRESSO FIXA */}
-      <View style={styles.progressContainer}>
-        {deck.posts.map((_, idx) => (
-          <View key={idx} style={styles.progressBarBg}>
-            {idx < activePostIndex ? (
-              <View style={[styles.progressBarFill, { width: '100%' }]} />
-            ) : idx === activePostIndex ? (
-              <Animated.View 
-                style={[
-                  styles.progressBarFill, 
-                  { 
-                    width: progressAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0%', '100%']
-                    }) 
-                  }
-                ]} 
-              />
-            ) : null}
-          </View>
-        ))}
-      </View>
-
-      {/* 2. HEADER FIXO */}
-      <TouchableOpacity style={styles.topHeaderProfile} onPress={handleProfilePress} activeOpacity={0.8}>
-          <Image 
-            source={{ uri: deck.author.profile?.imageUrl || 'https://via.placeholder.com/50' }} 
-            style={styles.headerAvatar} 
-          />
-          <Text style={styles.headerUsername}>{deck.author.name}</Text>
-      </TouchableOpacity>
-
-      {/* 3. LISTA DE POSTS */}
       <FlatList
-        ref={horizontalListRef}
-        data={deck.posts}
-        keyExtractor={(item) => item.id}
+        ref={flatListRef}
+        data={userPosts}
         horizontal
         pagingEnabled
+        scrollEnabled={true} 
         showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => {
+          const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+          if (index !== currentIndex) setCurrentIndex(index);
+        }}
         renderItem={({ item, index }) => (
-          <FeedPostCard 
-            post={item} 
-            author={deck.author} 
-            isActive={isActiveDeck && index === activePostIndex}
-            isFollowedByMe={isFollowed} // Passa o status controlado pelo hook
-            onFollow={handleToggleFollow} // Passa a nossa nova função
-            onShare={() => onSharePost(item.id, item.imageUrl, deck.author.name)}
-            onOptions={() => onOptionsPost(item.id, isOwner)} 
-            onOpenComments={() => onOpenComments(item.id, deck.author.id)}
-            onDelete={() => onDeletePost(item.id)}
-          />
+          <View style={styles.slideItem}>
+            {/* O post sempre renderiza a mídia por baixo para evitar vazios */}
+            {item.mediaType === 'VIDEO' ? (
+              <VideoItem 
+                url={item.imageUrl} 
+                active={isActiveDeck && index === currentIndex && !isCommentsOpen && !shouldBlur} 
+              />
+            ) : (
+              <Image source={{ uri: item.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            )}
+
+            {/* CAMADA DE BLUR (Sobreposição) */}
+            {shouldBlur && (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}>
+                <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={styles.blurOverlay}>
+                  <Ionicons name="eye-off" size={80} color="white" />
+                  <Text style={styles.blurTitle}>Conteúdo Sensível</Text>
+                  <Text style={styles.blurSubtitle}>
+                    Este post está oculto por decisão da moderação da comunidade.
+                  </Text>
+                  
+                  {loggedInUser?.role === 'ADMIN' && (
+                    <TouchableOpacity 
+                      style={styles.adminActionBtn} 
+                      onPress={() => Alert.alert("Painel Admin", "Escolha uma ação:", [
+                        { text: "Cancelar" },
+                        { text: "Remover Post", style: 'destructive', onPress: () => deletePost(item.id) }
+                      ])}
+                    >
+                      <Text style={styles.adminText}>Ações de Administrador</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
         )}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 80 }}
-        windowSize={3}
-        initialNumToRender={1}
-        maxToRenderPerBatch={1}
-        removeClippedSubviews={true}
-        onEndReached={onDeckFinished}
       />
+
+      {/* Interface de Overlay Superior */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <LinearGradient colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.8)']} style={styles.overlay} pointerEvents="box-none">
+          
+          <View style={styles.progressRow}>
+            {userPosts.map((_: any, i: number) => (
+              <View key={i} style={styles.track}>
+                <Animated.View style={[styles.fill, { width: i < currentIndex ? '100%' : i === currentIndex ? progressAnim.interpolate({inputRange:[0,1], outputRange:['0%','100%']}) : '0%' }]} />
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.headerRow}>
+            <TouchableOpacity 
+              style={styles.userInfo}
+              onPress={() => navigation.navigate(isOwner ? 'ProfileTab' : 'PublicProfile', { userId: author?.id })}
+            >
+              <Image source={{ uri: author?.profile?.imageUrl || 'https://ui-avatars.com/api/?name=U' }} style={styles.avatar} />
+              <Text style={styles.name}>@{author?.name}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.sideButtons}>
+            {!isOwner && !isAlreadyFollowing && (
+              <TouchableOpacity style={[styles.actionBtn, styles.followBtn]} onPress={() => author?.id && followUser(author.id)}>
+                <Ionicons name="add" size={24} color="white" />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => currentPost.isLikedByMe ? unlikePost(currentPost.id) : likePost(currentPost.id)}>
+              <Ionicons 
+                name={currentPost.isLikedByMe ? "heart" : "heart-outline"} 
+                size={38} 
+                color={currentPost.isLikedByMe ? "#EF4444" : "white"} 
+              />
+              <Text style={styles.actionText}>{currentPost.likesCount || 0}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => setIsCommentsOpen(true)}>
+              <Ionicons name="chatbubble-outline" size={32} color="white" />
+              <Text style={styles.actionText}>{currentPost.commentsCount || 0}</Text>
+            </TouchableOpacity>
+
+            {isOwner ? (
+              <TouchableOpacity style={styles.actionBtn} onPress={() => deletePost(currentPost.id)}>
+                <Ionicons name="trash-outline" size={30} color="#FF4444" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.actionBtn} onPress={() => setIsReportingOpen(true)}>
+                <Ionicons name="ellipsis-horizontal" size={30} color="white" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.footer} pointerEvents="none">
+            <Text style={styles.caption}>{currentPost.content}</Text>
+          </View>
+        </LinearGradient>
+      </View>
+
+      {isCommentsOpen && (
+        <View style={StyleSheet.absoluteFill}>
+          <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setIsCommentsOpen(false)} />
+          <FeedCommentSheet postId={currentPost.id} authorId={author?.id} onClose={() => setIsCommentsOpen(false)} />
+        </View>
+      )}
+
+      <ReportPostModal isOpen={isReportingOpen} onClose={() => setIsReportingOpen(false)} postId={currentPost.id} />
     </View>
   );
-};
+}
+
+function VideoItem({ url, active }: any) {
+  const player = useVideoPlayer(url, p => { p.loop = true; });
+  useEffect(() => { active ? player.play() : player.pause(); }, [active]);
+  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" />;
+}
 
 const styles = StyleSheet.create({
-  container: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, backgroundColor: 'black' },
-  progressContainer: { position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, left: 10, right: 10, flexDirection: 'row', height: 3, gap: 4, zIndex: 110, elevation: 10 },
-  progressBarBg: { flex: 1, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 2, overflow: 'hidden' },
-  progressBarFill: { height: '100%', backgroundColor: 'white' },
-  topHeaderProfile: { position: 'absolute', top: Platform.OS === 'ios' ? 65 : 35, left: 16, flexDirection: 'row', alignItems: 'center', zIndex: 120, elevation: 10 },
-  headerAvatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: 'white', marginRight: 10 },
-  headerUsername: { color: 'white', fontSize: 16, fontWeight: 'bold', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 3 },
+  container: { flex: 1, backgroundColor: 'black' },
+  loaderContainer: { flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' },
+  slideItem: { width: SCREEN_WIDTH, height: '100%', backgroundColor: '#000' },
+  overlay: { flex: 1, padding: 15 },
+  progressRow: { flexDirection: 'row', gap: 4, marginTop: Platform.OS === 'ios' ? 50 : 35 },
+  track: { flex: 1, height: 2, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 1, overflow: 'hidden' },
+  fill: { height: '100%', backgroundColor: 'white' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 20 },
+  userInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: { width: 45, height: 45, borderRadius: 22.5, borderWidth: 1.5, borderColor: 'white' },
+  name: { color: 'white', fontWeight: 'bold', fontSize: 16, textShadowColor: 'black', textShadowRadius: 2 },
+  sideButtons: { position: 'absolute', right: 12, bottom: 120, alignItems: 'center', gap: 18 },
+  actionBtn: { alignItems: 'center', justifyContent: 'center' },
+  followBtn: { backgroundColor: '#8B5CF6', width: 34, height: 34, borderRadius: 17, marginBottom: 5, borderWidth: 2, borderColor: 'black' },
+  actionText: { color: 'white', fontSize: 12, fontWeight: 'bold', marginTop: 2 },
+  footer: { position: 'absolute', bottom: 40, left: 15, right: 90 },
+  caption: { color: 'white', fontSize: 15, textShadowColor: 'black', textShadowRadius: 2 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  blurOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', padding: 30, zIndex: 10 },
+  blurTitle: { color: 'white', fontSize: 26, fontWeight: 'bold', marginTop: 20 },
+  blurSubtitle: { color: '#ccc', textAlign: 'center', marginTop: 15, fontSize: 16, lineHeight: 24 },
+  adminActionBtn: { marginTop: 40, backgroundColor: '#EF4444', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 30 },
+  adminText: { color: 'white', fontWeight: 'bold' }
 });

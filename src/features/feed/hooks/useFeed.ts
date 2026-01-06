@@ -1,127 +1,162 @@
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQueryClient,
-  useQuery,
-  InfiniteData,
-} from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Alert } from 'react-native';
 import * as feedApi from '../services/feedApi';
-import { followUser, unfollowUser } from '../../profile/services/profileApi'; 
-import { chatApi } from '../../chat/services/chatApi'; 
-import { FeedDeck } from '@/types/feed.types';
-import { api } from '@/services/api';
-import { useAuth } from '@/contexts/AuthContext';
+import { api } from '../../../services/api';
 
+// HOOK PRINCIPAL PARA BUSCAR O FEED
 export const useGetFeed = () => {
-  const { user } = useAuth();
-
   return useInfiniteQuery({
-    queryKey: ['feed', user?.id],
+    queryKey: ['feed'],
     queryFn: async ({ pageParam = 0 }) => {
-      return await feedApi.getFeed({ skip: pageParam, take: 2 });
+      const data = await feedApi.getFeed({ skip: pageParam, take: 1 });
+      
+      // LOG DE DIAGNÓSTICO: Vamos ver no terminal se o isSensitive está a chegar do Backend
+      if (data && data.posts) {
+        data.posts.forEach((p: any) => {
+          console.log(`📡 [API Feed] Post ${p.id.slice(-4)} | isSensitive: ${p.isSensitive} | reports: ${p.reportsCount}`);
+        });
+      }
+      
+      return data;
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
-      if (!lastPage || lastPage.length === 0) return undefined;
-      return allPages.length * 2; 
+      if (!lastPage || !lastPage.author) return undefined;
+      return allPages.length;
     },
-    enabled: !!user?.id,
-    staleTime: 1000 * 60 * 5, 
+    staleTime: 0, // Reduzi para 0 para garantir que o teste de Admin reflita na hora
   });
 };
 
-export const useFollowAuthorInFeed = () => {
+// HOOK PARA DENUNCIAR POST
+export const useReportPost = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-
   return useMutation({
-    mutationFn: (authorId: string) => followUser(authorId),
-    onMutate: async (authorId) => {
-      const queryKey = ['feed', user?.id];
-      await queryClient.cancelQueries({ queryKey });
-      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(queryKey);
-
-      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(queryKey, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page) => 
-            page.map((deck) => 
-              deck.author.id === authorId 
-                ? { ...deck, author: { ...deck.author, isFollowedByMe: true } } 
-                : deck
-            )
-          ),
-        };
-      });
-      return { previousFeed };
-    },
-    onError: (err, authorId, context) => {
-      if (context?.previousFeed) {
-        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
-      }
-      Alert.alert('Erro', 'Não foi possível seguir o utilizador.');
-    },
-    onSettled: () => {
+    mutationFn: ({ postId, reason }: { postId: string; reason: string }) => 
+      feedApi.reportPost(postId, { reason }),
+    onSuccess: () => {
+      // Forçamos o feed a atualizar para aplicar o Blur se atingir 3 denúncias
       queryClient.invalidateQueries({ queryKey: ['feed'] });
-      queryClient.invalidateQueries({ queryKey: ['discovery'] });
-    },
+    }
   });
 };
 
-export const useUnfollowAuthorInFeed = () => {
+// HOOKS PARA COMENTÁRIOS
+export const useGetPostComments = (postId: string) => {
+  return useQuery({
+    queryKey: ['postComments', postId],
+    queryFn: () => feedApi.getPostComments(postId),
+  });
+};
+
+export const useCommentOnPost = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-
   return useMutation({
-    mutationFn: (authorId: string) => unfollowUser(authorId),
-    onMutate: async (authorId) => {
-      const queryKey = ['feed', user?.id];
-      await queryClient.cancelQueries({ queryKey });
-      const previousFeed = queryClient.getQueryData<InfiniteData<FeedDeck[]>>(queryKey);
-
-      queryClient.setQueryData<InfiniteData<FeedDeck[]>>(queryKey, (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page) => 
-            page.map((deck) => 
-              deck.author.id === authorId 
-                ? { ...deck, author: { ...deck.author, isFollowedByMe: false } } 
-                : deck
-            )
-          ),
-        };
-      });
-      return { previousFeed };
-    },
-    onError: (err, authorId, context) => {
-      if (context?.previousFeed) {
-        queryClient.setQueryData(['feed', user?.id], context.previousFeed);
-      }
-      Alert.alert('Erro', 'Não foi possível deixar de seguir.');
-    },
-    onSettled: () => {
+    mutationFn: ({ postId, content }: { postId: string; content: string }) =>
+      feedApi.commentOnPost(postId, content),
+    onSuccess: (_, { postId }) => {
+      queryClient.invalidateQueries({ queryKey: ['postComments', postId] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
-      queryClient.invalidateQueries({ queryKey: ['discovery'] });
     },
   });
 };
 
-// ... Restante do ficheiro (Likes e Comentários) permanece igual
+// HOOKS PARA LIKE (Ajustados para preservar isSensitive no Cache)
 export const useLikePost = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: feedApi.likePost,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); },
+    mutationFn: (postId: string) => feedApi.likePost(postId),
+    onMutate: async (postId) => {
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const previousFeed = queryClient.getQueryData(['feed']);
+
+      queryClient.setQueryData(['feed'], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            posts: page.posts.map((p: any) =>
+              p.id === postId 
+                ? { ...p, isLikedByMe: true, likesCount: (p.likesCount || 0) + 1, isSensitive: p.isSensitive } 
+                : p
+            ),
+          })),
+        };
+      });
+      return { previousFeed };
+    },
+    onError: (err, postId, context: any) => {
+      if (context?.previousFeed) queryClient.setQueryData(['feed'], context.previousFeed);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
 };
 
 export const useUnlikePost = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: feedApi.unlikePost,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); },
+    mutationFn: (postId: string) => feedApi.unlikePost(postId),
+    onMutate: async (postId) => {
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const previousFeed = queryClient.getQueryData(['feed']);
+
+      queryClient.setQueryData(['feed'], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            posts: page.posts.map((p: any) =>
+              p.id === postId 
+                ? { ...p, isLikedByMe: false, likesCount: Math.max(0, (p.likesCount || 0) - 1), isSensitive: p.isSensitive } 
+                : p
+            ),
+          })),
+        };
+      });
+      return { previousFeed };
+    },
+    onError: (err, postId, context: any) => {
+      if (context?.previousFeed) queryClient.setQueryData(['feed'], context.previousFeed);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+  });
+};
+
+// HOOK PARA CRIAR POST
+export const useCreatePost = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (formData: FormData) => feedApi.createPost(formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+};
+
+// HOOK PARA ELIMINAR POST
+export const useDeletePost = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (postId: string) => feedApi.deletePost(postId),
+    onMutate: async (postId) => {
+      await queryClient.cancelQueries({ queryKey: ['feed'] });
+      const previousFeed = queryClient.getQueryData(['feed']);
+      queryClient.setQueryData(['feed'], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => ({
+            ...page,
+            posts: page.posts.filter((p: any) => p.id !== postId)
+          })).filter((page: any) => page.posts.length > 0)
+        };
+      });
+      return { previousFeed };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
   });
 };
