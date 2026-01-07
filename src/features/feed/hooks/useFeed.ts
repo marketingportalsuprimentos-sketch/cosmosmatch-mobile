@@ -9,14 +9,11 @@ export const useGetFeed = () => {
     queryKey: ['feed'],
     queryFn: async ({ pageParam = 0 }) => {
       const data = await feedApi.getFeed({ skip: pageParam, take: 1 });
-      
-      // LOG DE DIAGNÓSTICO: Vamos ver no terminal se o isSensitive está a chegar do Backend
       if (data && data.posts) {
         data.posts.forEach((p: any) => {
           console.log(`📡 [API Feed] Post ${p.id.slice(-4)} | isSensitive: ${p.isSensitive} | reports: ${p.reportsCount}`);
         });
       }
-      
       return data;
     },
     initialPageParam: 0,
@@ -24,7 +21,7 @@ export const useGetFeed = () => {
       if (!lastPage || !lastPage.author) return undefined;
       return allPages.length;
     },
-    staleTime: 0, // Reduzi para 0 para garantir que o teste de Admin reflita na hora
+    staleTime: 0,
   });
 };
 
@@ -35,7 +32,6 @@ export const useReportPost = () => {
     mutationFn: ({ postId, reason }: { postId: string; reason: string }) => 
       feedApi.reportPost(postId, { reason }),
     onSuccess: () => {
-      // Forçamos o feed a atualizar para aplicar o Blur se atingir 3 denúncias
       queryClient.invalidateQueries({ queryKey: ['feed'] });
     }
   });
@@ -61,7 +57,19 @@ export const useCommentOnPost = () => {
   });
 };
 
-// HOOKS PARA LIKE (Ajustados para preservar isSensitive no Cache)
+// --- CORREÇÃO: ADICIONADO useDeleteComment ---
+export const useDeleteComment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: string) => feedApi.deleteComment(commentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['postComments'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+};
+
+// HOOKS PARA LIKE
 export const useLikePost = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -69,7 +77,6 @@ export const useLikePost = () => {
     onMutate: async (postId) => {
       await queryClient.cancelQueries({ queryKey: ['feed'] });
       const previousFeed = queryClient.getQueryData(['feed']);
-
       queryClient.setQueryData(['feed'], (old: any) => {
         if (!old) return old;
         return {
@@ -100,7 +107,6 @@ export const useUnlikePost = () => {
     onMutate: async (postId) => {
       await queryClient.cancelQueries({ queryKey: ['feed'] });
       const previousFeed = queryClient.getQueryData(['feed']);
-
       queryClient.setQueryData(['feed'], (old: any) => {
         if (!old) return old;
         return {
@@ -124,7 +130,6 @@ export const useUnlikePost = () => {
   });
 };
 
-// HOOK PARA CRIAR POST
 export const useCreatePost = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -135,7 +140,6 @@ export const useCreatePost = () => {
   });
 };
 
-// HOOK PARA ELIMINAR POST
 export const useDeletePost = () => {
   const queryClient = useQueryClient();
   return useMutation({

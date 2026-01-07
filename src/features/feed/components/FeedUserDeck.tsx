@@ -33,7 +33,7 @@ export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: a
   const { mutate: followUser } = useFollowUser();
   const { data: followingList } = useGetFollowing(loggedInUser?.id);
 
-  // Extração segura do post para evitar tela preta
+  // Extração segura do post
   const currentPost = useMemo(() => {
     if (!userPosts || userPosts.length === 0) return null;
     return userPosts[currentIndex] || userPosts[0];
@@ -47,10 +47,7 @@ export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: a
     return followingList.some((u: any) => u.id === author.id);
   }, [followingList, author?.id]);
 
-  // LÓGICA DE MODERAÇÃO SINCRONIZADA COM O PRISMA
-  // O post permanece na lista, mas o Blur é ativado se:
-  // 1. isSensitive for true (Marcado pelo Admin ou Sistema)
-  // 2. reportsCount for 3 ou mais
+  // LÓGICA DE MODERAÇÃO: Blur ativado por reports ou flag manual
   const shouldBlur = useMemo(() => {
     if (!currentPost) return false;
     const reportsCount = currentPost.reportsCount || 0;
@@ -66,7 +63,7 @@ export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: a
     }
   }, [userPosts.length, currentIndex, isActiveDeck]);
 
-  // Temporizador de Progresso (Stories Style)
+  // Temporizador de Progresso
   useEffect(() => {
     if (isActiveDeck && currentPost && !isCommentsOpen && !isReportingOpen && !shouldBlur) {
       let duration = 5000;
@@ -120,7 +117,6 @@ export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: a
         }}
         renderItem={({ item, index }) => (
           <View style={styles.slideItem}>
-            {/* O post sempre renderiza a mídia por baixo para evitar vazios */}
             {item.mediaType === 'VIDEO' ? (
               <VideoItem 
                 url={item.imageUrl} 
@@ -130,7 +126,7 @@ export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: a
               <Image source={{ uri: item.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
             )}
 
-            {/* CAMADA DE BLUR (Sobreposição) */}
+            {/* CAMADA DE BLUR */}
             {shouldBlur && (
               <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}>
                 <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
@@ -163,6 +159,7 @@ export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: a
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         <LinearGradient colors={['rgba(0,0,0,0.5)', 'transparent', 'rgba(0,0,0,0.8)']} style={styles.overlay} pointerEvents="box-none">
           
+          {/* Barra de Tempo (Sempre visível) */}
           <View style={styles.progressRow}>
             {userPosts.map((_: any, i: number) => (
               <View key={i} style={styles.track}>
@@ -171,6 +168,7 @@ export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: a
             ))}
           </View>
 
+          {/* Identidade do Usuário (Sempre visível) */}
           <View style={styles.headerRow}>
             <TouchableOpacity 
               style={styles.userInfo}
@@ -181,41 +179,54 @@ export function FeedUserDeck({ userPosts = [], isActiveDeck, onDeckComplete }: a
             </TouchableOpacity>
           </View>
 
+          {/* Botões Laterais - Ocultar Sociais e Opções se tiver Blur */}
           <View style={styles.sideButtons}>
-            {!isOwner && !isAlreadyFollowing && (
+            {/* Ocultar botão Seguir se houver Blur ou se já segue */}
+            {!shouldBlur && !isOwner && !isAlreadyFollowing && (
               <TouchableOpacity style={[styles.actionBtn, styles.followBtn]} onPress={() => author?.id && followUser(author.id)}>
                 <Ionicons name="add" size={24} color="white" />
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.actionBtn} onPress={() => currentPost.isLikedByMe ? unlikePost(currentPost.id) : likePost(currentPost.id)}>
-              <Ionicons 
-                name={currentPost.isLikedByMe ? "heart" : "heart-outline"} 
-                size={38} 
-                color={currentPost.isLikedByMe ? "#EF4444" : "white"} 
-              />
-              <Text style={styles.actionText}>{currentPost.likesCount || 0}</Text>
-            </TouchableOpacity>
+            {/* Ocultar Coração e Comentários se houver Blur */}
+            {!shouldBlur && (
+              <>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => currentPost.isLikedByMe ? unlikePost(currentPost.id) : likePost(currentPost.id)}>
+                  <Ionicons 
+                    name={currentPost.isLikedByMe ? "heart" : "heart-outline"} 
+                    size={38} 
+                    color={currentPost.isLikedByMe ? "#EF4444" : "white"} 
+                  />
+                  <Text style={styles.actionText}>{currentPost.likesCount || 0}</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionBtn} onPress={() => setIsCommentsOpen(true)}>
-              <Ionicons name="chatbubble-outline" size={32} color="white" />
-              <Text style={styles.actionText}>{currentPost.commentsCount || 0}</Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => setIsCommentsOpen(true)}>
+                  <Ionicons name="chatbubble-outline" size={32} color="white" />
+                  <Text style={styles.actionText}>{currentPost.commentsCount || 0}</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
+            {/* Lógica de Opções Ajustada: Lixeira para dono, Três pontos apenas se não houver Blur */}
             {isOwner ? (
               <TouchableOpacity style={styles.actionBtn} onPress={() => deletePost(currentPost.id)}>
                 <Ionicons name="trash-outline" size={30} color="#FF4444" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.actionBtn} onPress={() => setIsReportingOpen(true)}>
-                <Ionicons name="ellipsis-horizontal" size={30} color="white" />
-              </TouchableOpacity>
+              !shouldBlur && (
+                <TouchableOpacity style={styles.actionBtn} onPress={() => setIsReportingOpen(true)}>
+                  <Ionicons name="ellipsis-horizontal" size={30} color="white" />
+                </TouchableOpacity>
+              )
             )}
           </View>
 
-          <View style={styles.footer} pointerEvents="none">
-            <Text style={styles.caption}>{currentPost.content}</Text>
-          </View>
+          {/* Legenda (Oculta se houver Blur para limpar a interface) */}
+          {!shouldBlur && (
+            <View style={styles.footer} pointerEvents="none">
+              <Text style={styles.caption}>{currentPost.content}</Text>
+            </View>
+          )}
         </LinearGradient>
       </View>
 
