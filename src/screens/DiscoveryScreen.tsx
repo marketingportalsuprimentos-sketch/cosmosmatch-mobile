@@ -39,7 +39,7 @@ const EmailVerificationAlert = ({
   isVisible, 
   onClose, 
   topOffset,
-  onVerifyPress // Nova função recebida
+  onVerifyPress 
 }: { 
   user: any, 
   isVisible: boolean, 
@@ -70,14 +70,12 @@ const EmailVerificationAlert = ({
             {t('grace_period_msg', `Restam ${Math.ceil(hoursLeft)}h para confirmar.`)}
           </Text>
           
-          {/* --- NOVO BOTÃO DE AÇÃO --- */}
           <TouchableOpacity onPress={onVerifyPress} style={styles.actionLinkBtn}>
             <Text style={styles.actionLinkText}>Verificar Agora</Text>
             <Ionicons name="arrow-forward" size={12} color="#78350F" />
           </TouchableOpacity>
         </View>
         
-        {/* BOTÃO DE FECHAR (X) */}
         <TouchableOpacity onPress={onClose} style={styles.closeAlertButton} hitSlop={{top:10, bottom:10, left:10, right:10}}>
           <Ionicons name="close" size={20} color="#78350F" />
         </TouchableOpacity>
@@ -382,13 +380,12 @@ export default function DiscoveryScreen() {
             )}
         </View>
 
-        {/* --- ALERTA FLUTUANTE DE 72H COM LINK --- */}
         <EmailVerificationAlert 
             user={user} 
             isVisible={isAlertVisible} 
             onClose={() => setIsAlertVisible(false)} 
             topOffset={alertTopOffset}
-            onVerifyPress={() => navigation.navigate('PleaseVerifyScreen')} 
+            onVerifyPress={() => navigation.navigate('PleaseVerifyScreen', { fromDiscovery: true })} 
         />
 
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -460,7 +457,6 @@ const styles = StyleSheet.create({
   toastContainer: { position: 'absolute', top: 60, alignSelf: 'center', backgroundColor: '#A855F7', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 9999, elevation: 9999, shadowColor: "#000", shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.3, shadowRadius: 4.65 },
   toastText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
 
-  // --- Estilos do Alerta Flutuante ---
   floatingAlert: {
     position: 'absolute',
     left: 16,

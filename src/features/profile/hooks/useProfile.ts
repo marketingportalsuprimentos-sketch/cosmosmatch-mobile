@@ -10,6 +10,10 @@ import { useAuth } from '@/contexts/AuthContext';
 
 // --- LEITURA (Queries) ---
 
+/**
+ * Hook para obter o perfil do utilizador logado.
+ * Certifica-te de que este nome é exatamente o que chamas nos teus ecrãs.
+ */
 export const useGetMyProfile = () => {
   return useQuery({
     queryKey: ['myProfile'],
@@ -177,7 +181,6 @@ export const useCommentOnGalleryPhoto = (targetUserId?: string) => {
       const response = await profileApi.commentOnGalleryPhoto(photoId, { content });
       if (targetUserId) {
           try {
-              // Integração com o Chat: Avisa o usuário por DM
               await chatApi.createOrGetConversation({
                   targetUserId,
                   content: `Comentou na sua foto: "${content}"` 
@@ -196,36 +199,61 @@ export const useCommentOnGalleryPhoto = (targetUserId?: string) => {
   });
 };
 
-// --- FOLLOW / UNFOLLOW (Otimizado para o Feed) ---
+/**
+ * Hook para deletar comentário.
+ * Alinhado com a rota do teu Backend.
+ */
+export const useDeleteGalleryPhotoComment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ commentId }: { photoId: string; commentId: string }) => 
+      profileApi.deleteGalleryPhotoComment(commentId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['galleryComments', variables.photoId] });
+      queryClient.invalidateQueries({ queryKey: ['galleryPhotos'] });
+      toast.success('Comentário removido.');
+    },
+    onError: (error: any) => {
+      console.error('Erro ao deletar comentário:', error);
+      const msg = error?.response?.data?.message || 'Erro ao remover comentário.';
+      toast.error(msg);
+    }
+  });
+};
+
+// --- FOLLOW / UNFOLLOW ---
 
 export const useFollowUser = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth(); 
 
   return useMutation({
     mutationFn: profileApi.followUser,
     onMutate: async (targetUserId: string) => {
-      const feedKey = ['feed', user?.id];
+      const feedKey = ['feed'];
       await queryClient.cancelQueries({ queryKey: feedKey });
       const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
 
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (oldFeed) => {
         if (!oldFeed || !oldFeed.pages) return oldFeed;
-        const newPages = oldFeed.pages.map(page => {
-           if (!page) return page;
-           // Sincroniza o estado no feed para o botão mudar na hora
-           if (page.author?.id === targetUserId) {
-               return { ...page, author: { ...page.author, isFollowing: true } };
-           }
-           return page;
-        });
-        return { ...oldFeed, pages: newPages };
+        return {
+          ...oldFeed,
+          pages: oldFeed.pages.map(page => {
+             if (!page || !page.posts) return page;
+             return {
+                ...page,
+                posts: page.posts.map((p: any) => 
+                   p.authorId === targetUserId ? { ...p, author: { ...p.author, isFollowedByMe: true } } : p
+                )
+             };
+          })
+        };
       });
       return { previousFeed };
     },
     onSettled: (_, __, targetUserId) => {
-      queryClient.invalidateQueries({ queryKey: ['followers', targetUserId] });
       queryClient.invalidateQueries({ queryKey: ['following'] }); 
+      queryClient.invalidateQueries({ queryKey: ['followers'] }); 
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
       queryClient.invalidateQueries({ queryKey: ['publicProfile', targetUserId] });
       toast.success('A seguir!');
     }
@@ -234,31 +262,35 @@ export const useFollowUser = () => {
 
 export const useUnfollowUser = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   return useMutation({
     mutationFn: profileApi.unfollowUser,
     onMutate: async (targetUserId: string) => {
-      const feedKey = ['feed', user?.id];
+      const feedKey = ['feed'];
       await queryClient.cancelQueries({ queryKey: feedKey });
       const previousFeed = queryClient.getQueryData<InfiniteData<any>>(feedKey);
 
       queryClient.setQueryData<InfiniteData<any>>(feedKey, (oldFeed) => {
         if (!oldFeed || !oldFeed.pages) return oldFeed;
-        const newPages = oldFeed.pages.map(page => {
-           if (!page) return page;
-           if (page.author?.id === targetUserId) {
-               return { ...page, author: { ...page.author, isFollowing: false } };
-           }
-           return page;
-        });
-        return { ...oldFeed, pages: newPages };
+        return {
+          ...oldFeed,
+          pages: oldFeed.pages.map(page => {
+             if (!page || !page.posts) return page;
+             return {
+                ...page,
+                posts: page.posts.map((p: any) => 
+                   p.authorId === targetUserId ? { ...p, author: { ...p.author, isFollowedByMe: false } } : p
+                )
+             };
+          })
+        };
       });
       return { previousFeed };
     },
     onSettled: (_, __, targetUserId) => {
-      queryClient.invalidateQueries({ queryKey: ['followers', targetUserId] });
       queryClient.invalidateQueries({ queryKey: ['following'] });
+      queryClient.invalidateQueries({ queryKey: ['followers'] }); 
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
       queryClient.invalidateQueries({ queryKey: ['publicProfile', targetUserId] });
     }
   });
@@ -281,6 +313,18 @@ export const useBlockUser = () => {
       queryClient.invalidateQueries({ queryKey: ['blockedUsers'] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       toast.success('Usuário bloqueado');
+    }
+  });
+};
+
+export const useUnblockUser = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: profileApi.unblockUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['blockedUsers'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      toast.success('Usuário desbloqueado');
     }
   });
 };

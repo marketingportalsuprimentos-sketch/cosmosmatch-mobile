@@ -7,10 +7,13 @@ import { navigate } from '../navigation/navigationRef';
 export const api = axios.create({
   baseURL: ENV.API_URL,
   withCredentials: true,
-  timeout: 15000, // Previne que o app trave se o servidor demorar nos cálculos de compatibilidade
+  timeout: 15000, 
 });
 
-// Interceptor de REQUEST: Garante que o Token seja injetado em cada chamada
+// VARIÁVEL DE CONTROLE: Mantém o registro do último alerta de Premium exibido
+let lastPremiumAlertTime = 0;
+const ALERT_COOLDOWN = 8000; // 8 segundos de intervalo mínimo entre alertas repetidos
+
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -19,37 +22,52 @@ api.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error('Erro ao recuperar token para a requisição:', error);
+      console.error('Erro ao recuperar token:', error);
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Interceptor de RESPONSE: Trata erros globais (401, 402, 403)
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const status = error.response?.status;
     const errorData = error.response?.data as { message?: string };
     const message = errorData?.message || 'Ocorreu um erro inesperado.';
+    const now = Date.now();
 
-    // 1. Sessão Expirada
+    // 1. Erro de Autenticação
     if (status === 401) {
       await storage.removeToken();
       navigate('Login');
-      toast.error('Sessão expirada. Por favor, faça login novamente.');
+      toast.error('Sessão expirada.');
       return Promise.reject(error);
     }
 
-    // 2. Limite de Uso / Paywall (402 ou 403 com mensagem de limite)
+    // 2. Silenciador de Quarentena (Soft Delete)
+    const isQuarantine = status === 403 && 
+                       !message.toLowerCase().includes('limite') && 
+                       !message.toLowerCase().includes('verifique o seu email');
+
+    if (isQuarantine) {
+      return Promise.reject(error); 
+    }
+
+    // 3. Tratamento de Limites / Premium (402 ou 403 de Limite)
+    // Aplicamos a trava de tempo para evitar múltiplos pop-ups simultâneos
     if (status === 402 || (status === 403 && message.toLowerCase().includes('limite'))) {
-      toast.error(message);
-      navigate('Premium');
+      
+      if (now - lastPremiumAlertTime > ALERT_COOLDOWN) {
+        lastPremiumAlertTime = now;
+        toast.error(message);
+        navigate('Premium');
+      }
+
       return Promise.reject(error);
     }
 
-    // 3. Verificação de Email
+    // 4. Verificação de Email
     if (status === 403 && message.toLowerCase().includes('verifique o seu email')) {
       toast.info('Verifique seu email para continuar.');
       return Promise.reject(error);

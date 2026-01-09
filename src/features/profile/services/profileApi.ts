@@ -14,15 +14,11 @@ import type { NatalChartData } from '../hooks/useProfile';
 
 // --- Funções de Perfil ---
 
-// Função Get My Profile
 export const getMyProfile = async (): Promise<Profile> => {
   const { data } = await api.get<Profile>('/profile/me');
   return data;
 };
 
-/**
- * Busca o número do dia pessoal
- */
 export const getPersonalDayVibration = async (): Promise<{ dayNumber: number }> => {
   const { data } = await api.get<{ dayNumber: number }>(
     '/profile/me/personal-day',
@@ -30,7 +26,6 @@ export const getPersonalDayVibration = async (): Promise<{ dayNumber: number }> 
   return data;
 };
 
-// Função Update Profile
 export const updateProfile = async (
   profileData: UpdateProfileDto
 ): Promise<Profile> => {
@@ -38,7 +33,6 @@ export const updateProfile = async (
   return data;
 };
 
-// Função Update Avatar
 export const updateAvatar = async (
   avatarFile: File,
   fileName: string
@@ -51,7 +45,6 @@ export const updateAvatar = async (
   return data;
 };
 
-// Função Get Public Profile
 export const getPublicProfile = async (
   userId: string
 ): Promise<Profile & { compatibility: CompatibilityResult | null }> => {
@@ -63,10 +56,6 @@ export const getPublicProfile = async (
 
 // --- SEGURANÇA / CONTA ---
 
-/**
- * Solicita a exclusão da conta (Soft Delete / Quarentena)
- * Rota: DELETE /users/me
- */
 export const deleteMyAccount = async (): Promise<void> => {
   await api.delete('/users/me');
 };
@@ -126,6 +115,16 @@ export const getGalleryPhotoComments = async (
     `/profile/gallery/${photoId}/comments`
   );
   return data;
+};
+
+/**
+ * Remove um comentário de uma foto da galeria.
+ * Rota corrigida conforme o teu backend: /profile/gallery/comments/:id
+ */
+export const deleteGalleryPhotoComment = async (
+  commentId: string
+): Promise<void> => {
+  await api.delete(`/profile/gallery/comments/${commentId}`);
 };
 
 

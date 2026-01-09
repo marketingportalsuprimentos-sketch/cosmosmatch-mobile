@@ -1,14 +1,15 @@
-import React, { useEffect } from 'react'; // Importar useEffect
-import { Platform } from 'react-native'; // Importar Platform
+import React, { useEffect } from 'react'; 
+import { Platform } from 'react-native'; 
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import * as NavigationBar from 'expo-navigation-bar'; // Importar a ferramenta
+import * as NavigationBar from 'expo-navigation-bar'; 
 
 import { TabBar } from '../components/layout/TabBar'; 
 import { DiscoveryScreen } from '../screens/DiscoveryScreen';
 import { PostsScreen } from '../screens/PostsScreen';
 import { ChatListScreen } from '../screens/ChatListScreen'; 
-import { ProfileScreen } from '../screens/ProfileScreen';
+import ProfileScreen from '../screens/ProfileScreen'; // Ajustado para import default
 import { PostCreationScreen } from '../screens/PostCreationScreen'; 
+import BlockedProfilesScreen from '../screens/BlockedProfilesScreen'; // Novo Import
 
 const Tab = createBottomTabNavigator();
 
@@ -19,7 +20,6 @@ export const MainTabs = () => {
     const setImmersiveMode = async () => {
       if (Platform.OS === 'android') {
         try {
-          // Configura uma vez para todas as abas
           await NavigationBar.setVisibilityAsync('hidden');
           await NavigationBar.setBehaviorAsync('overlay-swipe');
           await NavigationBar.setBackgroundColorAsync('#00000000');
@@ -29,7 +29,7 @@ export const MainTabs = () => {
       }
     };
     setImmersiveMode();
-  }, []); // Roda apenas uma vez ao carregar as abas
+  }, []); 
 
   return (
     <Tab.Navigator
@@ -49,6 +49,16 @@ export const MainTabs = () => {
 
       <Tab.Screen name="ChatTab" component={ChatListScreen} options={{ title: 'Chat' }} />
       <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: 'Perfil' }} />
+
+      {/* Rota para Gerenciar Bloqueados - Registrada aqui para ser acessível via navegação */}
+      <Tab.Screen 
+        name="BlockedProfiles" 
+        component={BlockedProfilesScreen} 
+        options={{ 
+          tabBarButton: () => null, // Não mostra o ícone na barra
+          tabBarStyle: { display: 'none' } // Esconde a barra nesta tela
+        }} 
+      />
     </Tab.Navigator>
   );
 };

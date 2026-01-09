@@ -1,11 +1,4 @@
-import React, { 
-  createContext, 
-  useContext, 
-  useState, 
-  useEffect, 
-  useCallback, 
-  ReactNode 
-} from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { api } from '../services/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
@@ -34,8 +27,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const queryClient = useQueryClient();
 
-  // NOTA: O interceptor de API foi movido para src/services/api.ts para evitar conflitos de ciclo de vida.
-
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
@@ -46,7 +37,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (isMounted) setUserState(data);
         }
       } catch (error) {
-        console.log("Sessão expirada ou erro de conexão no initAuth");
+        // Silencioso no init
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -67,7 +58,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       activeSocket = io(ENV.API_URL, {
         auth: { token },
         transports: ['websocket'],
-        reconnection: true,
       });
       activeSocket.on('connect', () => setSocket(activeSocket));
     };
@@ -87,23 +77,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await storage.setToken(tokenString);
       setUserState(userData);
       queryClient.clear();
-    } catch (error) {
-      console.error("Erro no signIn:", error);
+    } catch (error: any) {
+      // REMOVIDO console.error para não sujar o Metro em erros 403 esperados [cite: 2025-11-14]
       throw error;
     }
   }, [queryClient]);
 
   const reactivateAccount = useCallback(async (credentials) => {
     try {
-      const response = await api.post('/auth/reactivate', credentials);
-      const token = response.data?.token || response.data?.data?.token;
+      const response = await api.post('/auth/reactivate', {
+        email: credentials.email.trim(),
+        password: credentials.password
+      });
+
+      const token = response.data?.token || response.data?.accessToken || response.data?.data?.token;
       const userData = response.data?.user || response.data?.data?.user;
+
       if (token) {
-        await storage.setToken(token);
+        const tokenString = typeof token === 'string' ? token : JSON.stringify(token);
+        await storage.setToken(tokenString);
         setUserState(userData);
         queryClient.clear();
       }
-    } catch (error) { throw error; }
+    } catch (error) {
+      throw error; 
+    }
   }, [queryClient]);
 
   const logout = useCallback(async () => {
@@ -117,13 +115,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const incrementFreeContactsUsed = useCallback(() => {
     setUserState((curr) => {
       if (!curr?.subscription || curr.subscription.status !== 'FREE') return curr;
-      return { 
-        ...curr, 
-        subscription: { 
-          ...curr.subscription, 
-          freeContactsUsed: (curr.subscription.freeContactsUsed || 0) + 1 
-        } 
-      };
+      return { ...curr, subscription: { ...curr.subscription, freeContactsUsed: (curr.subscription.freeContactsUsed || 0) + 1 } };
     });
   }, []);
 
@@ -136,10 +128,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ 
-      user, setUser: setUserState, isLoading, signIn, reactivateAccount, 
-      logout, signOut: logout, incrementFreeContactsUsed, socket 
-    }}>
+    <AuthContext.Provider value={{ user, setUser: setUserState, isLoading, signIn, reactivateAccount, logout, signOut: logout, incrementFreeContactsUsed, socket }}>
       {children}
     </AuthContext.Provider>
   );

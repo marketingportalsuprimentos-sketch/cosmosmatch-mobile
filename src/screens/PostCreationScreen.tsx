@@ -8,15 +8,13 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useCreatePost } from '../features/feed/hooks/useFeed';
 import { LinearGradient } from 'expo-linear-gradient';
-
-// MUDANÇA V26: Removido expo-av, adicionado expo-video
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useTranslation } from 'react-i18next'; 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_VIDEO_DURATION = 60; 
 
-// Componente Wrapper para o Player (Para usar Hooks corretamente)
+// Componente para o Player de Preview
 const PreviewPlayer = ({ uri }: { uri: string }) => {
   const player = useVideoPlayer(uri, player => {
     player.loop = true;
@@ -30,6 +28,7 @@ const PreviewPlayer = ({ uri }: { uri: string }) => {
       style={styles.fullScreenMedia} 
       contentFit="cover"
       nativeControls={false} 
+      allowsFullscreen={false}
     />
   );
 };
@@ -45,7 +44,10 @@ export default function PostCreationScreen() {
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
 
   const processMedia = (asset: ImagePicker.ImagePickerAsset) => {
-    if (asset.type === 'video') {
+    // Verificação robusta do tipo de mídia
+    const isVideo = asset.type === 'video' || asset.mediaType === 'video';
+
+    if (isVideo) {
       const durationSec = (asset.duration || 0) / 1000; 
       if (durationSec > (MAX_VIDEO_DURATION + 3)) { 
          Alert.alert(t('video_too_long_title'), t('video_too_long_msg', {duration: MAX_VIDEO_DURATION}));
@@ -63,12 +65,15 @@ export default function PostCreationScreen() {
   const openGallery = async () => {
     try {
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All, 
+            // Usando array de strings para evitar erro de objeto undefined
+            mediaTypes: ['images', 'videos'], 
             allowsEditing: true, 
             quality: 0.8, 
             videoMaxDuration: MAX_VIDEO_DURATION,
         });
-        if (!result.canceled) processMedia(result.assets[0]);
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            processMedia(result.assets[0]);
+        }
     } catch (error) {
         Alert.alert(t('error'), t('error_gallery'));
     }
@@ -76,33 +81,26 @@ export default function PostCreationScreen() {
 
   const openCamera = async (mode: 'photo' | 'video') => {
     try {
-        const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
-        if (cameraPerm.status !== 'granted') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+        if (status !== 'granted') {
             Alert.alert(t('permission_denied'), t('enable_camera_permission'));
             return;
         }
 
-        let result;
-        if (mode === 'video') {
-            result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-                allowsEditing: true,
-                videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
-                quality: 0.6,
-                videoMaxDuration: MAX_VIDEO_DURATION, 
-            });
-        } else {
-            result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: false,
-                quality: 0.6, 
-                exif: false,
-            });
+        const result = await ImagePicker.launchCameraAsync({
+            // Sintaxe de array para compatibilidade total
+            mediaTypes: mode === 'video' ? ['videos'] : ['images'],
+            allowsEditing: true,
+            quality: 0.7,
+            videoMaxDuration: MAX_VIDEO_DURATION,
+        });
+
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+            processMedia(result.assets[0]);
         }
-
-        if (!result.canceled) processMedia(result.assets[0]);
-
     } catch (error) {
+        console.error("Erro camera:", error);
         Alert.alert(t('error'), t('error_capture'));
     }
   };
@@ -187,7 +185,6 @@ export default function PostCreationScreen() {
         <StatusBar hidden />
         <View style={styles.mediaLayer}>
             {mediaType === 'video' ? (
-                // PLAYER V26 (Novo expo-video)
                 <PreviewPlayer uri={mediaUri} />
             ) : (
                 <Image source={{ uri: mediaUri }} style={styles.fullScreenMedia} resizeMode="cover" />
@@ -200,8 +197,20 @@ export default function PostCreationScreen() {
                </View>
                <View style={styles.bottomArea}>
                   <Text style={styles.label}>{t('caption')}</Text>
-                  <TextInput style={styles.input} placeholder={t('write_something')} placeholderTextColor="#ccc" multiline maxLength={200} value={caption} onChangeText={setCaption} />
-                  <TouchableOpacity style={[styles.postButton, isPending && styles.disabledButton]} onPress={handlePost} disabled={isPending}>
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder={t('write_something')} 
+                    placeholderTextColor="#ccc" 
+                    multiline 
+                    maxLength={200} 
+                    value={caption} 
+                    onChangeText={setCaption} 
+                  />
+                  <TouchableOpacity 
+                    style={[styles.postButton, isPending && styles.disabledButton]} 
+                    onPress={handlePost} 
+                    disabled={isPending}
+                  >
                      {isPending ? <ActivityIndicator color="white" /> : <Text style={styles.postButtonText}>{t('publish')} ✨</Text>}
                   </TouchableOpacity>
                </View>
@@ -229,8 +238,26 @@ const styles = StyleSheet.create({
   closeButton: { padding: 5, shadowColor: 'black', shadowOpacity: 0.5, shadowRadius: 5 },
   bottomArea: { width: '100%', paddingBottom: 20 },
   label: { color: 'white', fontWeight: 'bold', marginBottom: 10, textShadowColor:'black', textShadowRadius: 5 },
-  input: { backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 15, padding: 15, color: 'white', fontSize: 16, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  postButton: { backgroundColor: '#8B5CF6', padding: 15, borderRadius: 30, alignItems: 'center', shadowColor: "#8B5CF6", shadowOffset: {width: 0, height: 4}, shadowOpacity: 0.5, shadowRadius: 5 },
+  input: { 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    borderRadius: 15, 
+    padding: 15, 
+    color: 'white', 
+    fontSize: 16, 
+    marginBottom: 20, 
+    borderWidth: 1, 
+    borderColor: 'rgba(255,255,255,0.3)' 
+  },
+  postButton: { 
+    backgroundColor: '#8B5CF6', 
+    padding: 15, 
+    borderRadius: 30, 
+    alignItems: 'center', 
+    shadowColor: "#8B5CF6", 
+    shadowOffset: {width: 0, height: 4}, 
+    shadowOpacity: 0.5, 
+    shadowRadius: 5 
+  },
   disabledButton: { opacity: 0.7 },
   postButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 }
 });

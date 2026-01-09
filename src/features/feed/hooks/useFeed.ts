@@ -49,7 +49,7 @@ export const useCommentOnPost = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ postId, content }: { postId: string; content: string }) =>
-      feedApi.commentOnPost(postId, content),
+      feedApi.commentOnPost(postId, { content }), 
     onSuccess: (_, { postId }) => {
       queryClient.invalidateQueries({ queryKey: ['postComments', postId] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
@@ -57,15 +57,21 @@ export const useCommentOnPost = () => {
   });
 };
 
-// --- CORREÇÃO: ADICIONADO useDeleteComment ---
+// --- CORREÇÃO: IMPLEMENTAÇÃO DO HOOK DE APAGAR COMENTÁRIO ---
 export const useDeleteComment = () => {
   const queryClient = useQueryClient();
   return useMutation({
+    // Chama a função deleteComment que já existe no seu feedApi.ts
     mutationFn: (commentId: string) => feedApi.deleteComment(commentId),
     onSuccess: () => {
+      // Invalida todas as queries de comentários para atualizar a lista na tela [cite: 2025-11-14]
       queryClient.invalidateQueries({ queryKey: ['postComments'] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
+    onError: (error: any) => {
+      console.error("Erro ao apagar comentário:", error);
+      Alert.alert("Erro", "Não foi possível apagar o comentário.");
+    }
   });
 };
 

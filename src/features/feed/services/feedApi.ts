@@ -8,7 +8,6 @@ interface CreateCommentData { content: string; }
 interface ReportPostData { reason: ReportReason; }
 
 // 1. Feed e Posts
-// CORREÇÃO: O retorno agora é FeedDeck[] (Array), pois o backend manda uma lista
 export const getFeed = async (params: { skip: number; take: number }): Promise<FeedDeck[]> => {
   try {
     const { data } = await api.get<FeedDeck[]>('/post/feed', { 
@@ -18,15 +17,12 @@ export const getFeed = async (params: { skip: number; take: number }): Promise<F
       } 
     });
 
-    // --- DEBUG: Vamos ver o que o servidor está mandando ---
     if (data && data.length > 0) {
        console.log('--- DEBUG FEED ---');
        console.log('Autor do primeiro post:', data[0].author.name);
-       // AQUI vamos descobrir a verdade:
        console.log('Eu sigo ele? (isFollowedByMe):', data[0].author.isFollowedByMe); 
        console.log('------------------');
     }
-    // -------------------------------------------------------
 
     return data;
   } catch (error: any) {
@@ -67,6 +63,15 @@ export const commentOnPost = async (postId: string, payload: CreateCommentData) 
 
 export const getPostComments = async (postId: string) => {
   const { data } = await api.get<PostComment[]>(`/post/${postId}/comments`);
+  return data;
+};
+
+/**
+ * CORREÇÃO: Adicionada a função deleteComment que estava faltando e causando erro no Hook.
+ * Esta função chama a rota DELETE definida no seu PostController.
+ */
+export const deleteComment = async (commentId: string): Promise<{ success: boolean }> => {
+  const { data } = await api.delete<{ success: boolean }>(`/post/comment/${commentId}`);
   return data;
 };
 

@@ -4,11 +4,11 @@ import {
 } from 'react-native';
 import { X, Send, Trash2 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-import { useAuth } from '../../../contexts/AuthContext'; // <--- Importante para saber quem sou eu
+import { useAuth } from '../../../contexts/AuthContext';
 import { 
   useGetGalleryPhotoComments, 
   useCommentOnGalleryPhoto,
-  useDeleteGalleryPhotoComment // <--- Hook novo
+  useDeleteGalleryPhotoComment 
 } from '../hooks/useProfile';
 import { useTimeAgo } from '../../../hooks/useTimeAgo';
 
@@ -17,7 +17,7 @@ interface GalleryCommentSheetProps {
   isOpen: boolean;
   onClose: () => void;
   targetUserId?: string;
-  isPhotoOwner: boolean; // <--- Recebe se sou dono da foto
+  isPhotoOwner: boolean; 
 }
 
 export const GalleryCommentSheet = ({ 
@@ -26,14 +26,14 @@ export const GalleryCommentSheet = ({
   
   const [newComment, setNewComment] = useState('');
   const navigation = useNavigation<any>();
-  const { user: loggedInUser } = useAuth(); // <--- Usuário logado
+  const { user: loggedInUser } = useAuth();
   const flatListRef = useRef<FlatList>(null);
   
   if (!isOpen || !photoId) return null;
 
   const { data: comments, isLoading } = useGetGalleryPhotoComments(photoId);
   const { mutate: sendComment, isPending: isSending } = useCommentOnGalleryPhoto(targetUserId);
-  const { mutate: deleteComment, isPending: isDeleting } = useDeleteGalleryPhotoComment(); // <--- Delete
+  const { mutate: deleteComment, isPending: isDeleting } = useDeleteGalleryPhotoComment(); 
   
   const { timeAgo } = useTimeAgo();
 
@@ -58,7 +58,6 @@ export const GalleryCommentSheet = ({
     });
   };
 
-  // Função para apagar
   const handleDeleteConfirm = (commentId: string) => {
     Alert.alert(
       "Apagar comentário?",
@@ -68,7 +67,8 @@ export const GalleryCommentSheet = ({
         { 
           text: "Apagar", 
           style: "destructive", 
-          onPress: () => deleteComment(commentId) 
+          // Ajustado para enviar photoId e commentId
+          onPress: () => deleteComment({ photoId, commentId }) 
         }
       ]
     );
@@ -101,7 +101,6 @@ export const GalleryCommentSheet = ({
                       contentContainerStyle={styles.listContent}
                       ListEmptyComponent={<Text style={styles.emptyText}>Seja o primeiro a comentar!</Text>}
                       renderItem={({ item }) => {
-                        // LÓGICA DE PERMISSÃO
                         const isAuthor = loggedInUser?.id === item.userId;
                         const canDelete = isPhotoOwner || isAuthor;
 
@@ -119,7 +118,6 @@ export const GalleryCommentSheet = ({
                                   <Text style={styles.commentText}>{item.content}</Text>
                               </View>
 
-                              {/* ÍCONE DA LIXEIRA */}
                               {canDelete && (
                                 <TouchableOpacity 
                                   onPress={() => handleDeleteConfirm(item.id)}
