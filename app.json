@@ -17,14 +17,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cosmosmatch.app",
-      "buildNumber": "72",
+      "buildNumber": "73",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "O CosmosMatch precisa de acesso ao microfone para gravar o som dos seus vídeos."
       }
     },
     "android": {
       "package": "com.cosmosmatch.app",
-      "versionCode": 72,
+      "versionCode": 73,
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -37,9 +38,6 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-video",
@@ -73,12 +71,6 @@
         {
           "photosPermission": "O CosmosMatch precisa de acesso às suas fotos para você personalizar seu perfil e compartilhar momentos.",
           "cameraPermission": "O CosmosMatch precisa acessar sua câmera para capturar fotos e vídeos em tempo real."
-        }
-      ],
-      [
-        "expo-av",
-        {
-          "microphonePermission": "Permitir que o CosmosMatch use o microfone para gravar áudio em seus vídeos."
         }
       ]
     ],
